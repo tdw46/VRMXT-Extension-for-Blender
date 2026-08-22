@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.5
+
 - **Breaking:** MToonXT glTF key `VRMC_materials_mtoonxt` → `VRMXT_materials_mtoonxt`.
   Import/export use the new name only. Python type `VrmcMaterialsMtoonxt` →
   `VrmxtMaterialsMtoonxt`.
