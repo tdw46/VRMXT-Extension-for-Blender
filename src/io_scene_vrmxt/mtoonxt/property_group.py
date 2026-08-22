@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Blender property groups for VRMC_materials_mtoonxt stencil authoring."""
+"""Blender property groups for VRMXT_materials_mtoonxt stencil authoring."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from ..format.mtoonxt import (
     OP_OUTSIDE,
     OP_SAME,
     OP_WRITE,
-    VrmcMaterialsMtoonxt,
+    VrmxtMaterialsMtoonxt,
 )
 
 BODY_OP_OFF = "OFF"
@@ -193,7 +193,7 @@ def _add_outline(settings: object, material: object) -> None:
 
 def apply_parsed_to_settings(
     settings: object,
-    extra: VrmcMaterialsMtoonxt,
+    extra: VrmxtMaterialsMtoonxt,
     index_to_material: dict[int, object],
 ) -> None:
     settings.body_op = BODY_OP_OFF
