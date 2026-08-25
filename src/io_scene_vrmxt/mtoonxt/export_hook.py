@@ -27,6 +27,7 @@ from .property_group import (
     OUTLINE_OP_OFF,
     iter_target_materials,
 )
+from .relationship_mapping import relationship_shorthand_extras
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,51 @@ def apply_mtoonxt_export(context: Any) -> None:
             blender_material, name_to_index, material_index
         )
 
+    relationships: list[MtoonxtStencilRelationship] = []
+    try:
+        from .property_group import relationships_from_scene
+
+        blender_context = getattr(context, "context", None)
+        scene = getattr(context, "scene", None) or getattr(
+            blender_context, "scene", None
+        )
+        relationships.extend(relationships_from_scene(name_to_index, scene=scene))
+    except Exception:  # noqa: BLE001 - standalone RNA is optional in embedded mode
+        logger.debug("VRMXT standalone relationship export unavailable", exc_info=True)
+    for provider in tuple(_EXTERNAL_RELATIONSHIP_EXPORT_PROVIDERS):
+        try:
+            relationships.extend(provider(context, name_to_index))
+        except Exception:  # noqa: BLE001 - one host must not abort export
+            logger.exception("VRMXT external stencil relationship provider failed")
+
+    mtoon_material_indices = {
+        material_index
+        for material_index, material_entry in enumerate(materials_raw)
+        if (material_dict := as_dict(material_entry)) is not None
+        and material_has_sibling_mtoon(material_dict)
+    }
+    relationships = [
+        relationship
+        for relationship in relationships
+        if set(relationship.writers).issubset(mtoon_material_indices)
+        and set(relationship.readers).issubset(mtoon_material_indices)
+    ]
+
+    # VRMXT owns the compatibility mapping. Root relationships are
+    # authoritative; only pixel-equivalent relationships receive legacy
+    # per-material shorthand for older consumers. Filter to exported VRM 1.0
+    # MToon materials first so a shorthand can never retain half a relation.
+    relationship_extras, relationship_errors = relationship_shorthand_extras(
+        relationships,
+        material_count=count,
+    )
+    for error in relationship_errors:
+        logger.warning("VRMXT relationship shorthand: %s", error)
+    for material_index, relationship_extra in enumerate(relationship_extras):
+        extras[material_index] = _merge_extra(
+            extras[material_index], relationship_extra
+        )
+
     wrote_any = False
     for material_index, material_entry in enumerate(materials_raw):
         material_dict = as_dict(material_entry)
@@ -222,18 +268,6 @@ def apply_mtoonxt_export(context: Any) -> None:
         write_mtoonxt_to_material_dict(material_dict, extra)
         wrote_any = True
 
-    relationships: list[MtoonxtStencilRelationship] = []
-    try:
-        from .property_group import relationships_from_scene
-
-        relationships.extend(relationships_from_scene(name_to_index))
-    except Exception:  # noqa: BLE001 - standalone RNA is optional in embedded mode
-        logger.debug("VRMXT standalone relationship export unavailable", exc_info=True)
-    for provider in tuple(_EXTERNAL_RELATIONSHIP_EXPORT_PROVIDERS):
-        try:
-            relationships.extend(provider(context, name_to_index))
-        except Exception:  # noqa: BLE001 - one host must not abort export
-            logger.exception("VRMXT external stencil relationship provider failed")
     write_stencil_relationships(json_dict, relationships)
 
     if wrote_any or relationships:

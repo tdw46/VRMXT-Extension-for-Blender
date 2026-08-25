@@ -42,21 +42,24 @@ MToonXT stencil.
 
 The same source tree can be vendored under another Blender extension. In that
 mode, import the vendored package by its nested package name and call
-`integration.register_embedded(...)`. Embedded registration deliberately omits
-VRMXT's standalone panels, operators, and RNA property groups so the host can
-own its UI and persisted authoring data without class collisions. The shared
-format parser, serializer, VRM 1 hook adapter, and portable GLB patcher remain
-available in both modes.
+`integration.register_embedded(...)`. VRMXT still owns and registers its
+portable Scene/Material properties; embedded registration omits only standalone
+panels and operators. A host can mirror its UI model with
+`integration.sync_bvt_scene_to_vrmxt(scene)` and call
+`integration.export_vrm_with_vrmxt(...)`. Existing shared RNA from an enabled
+standalone copy is reused rather than duplicated.
 
 The Blender manifest lives beside the Python package so the source directory is
 directly buildable as a standalone extension. Embedded hosts ignore that data
 file and load the same package through `integration`, so standalone and embedded
 installations cannot drift into separate implementations.
 
-`portable_exporter.patch_exported_vrm()` wraps an installed VRM exporter rather
-than replacing it: the host exports its normal VRM first, then atomically adds
-VRMXT JSON to the completed GLB. Original VRM materials and all stock
-extensions remain authoritative.
+Standalone installs expose **File > Export > VRM with VRMXT Extensions**. The
+operator calls the installed VRM add-on first, uses Extended VRM hooks when
+available, and atomically adds missing VRMXT JSON to the completed GLB as a
+fallback. Original VRM materials and all stock VRM 0.x/1.x features remain
+authoritative. The mapping, hook transaction, serializer, and fallback all live
+inside VRMXT; embedded hosts only synchronize properties and call this API.
 
 ## Development
 

@@ -83,6 +83,19 @@ def apply_mtoonxt_import(context: Any) -> None:
             continue
         apply_parsed_to_settings(settings, extra, dict(index_to_material))
 
+    if relationships:
+        try:
+            from .property_sync import sync_vrmxt_scene_to_bvt
+
+            blender_context = getattr(context, "context", None)
+            scene = getattr(context, "scene", None) or getattr(
+                blender_context, "scene", None
+            )
+            if scene is not None:
+                sync_vrmxt_scene_to_bvt(scene)
+        except Exception:  # noqa: BLE001 - optional host synchronization
+            logger.exception("VRMXT could not synchronize imported host properties")
+
 
 def on_vrm1_import(context: Any) -> None:
     try:

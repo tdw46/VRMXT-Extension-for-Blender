@@ -21,7 +21,6 @@ from .shim import make_export_context, make_import_context
 
 logger = logging.getLogger(__name__)
 
-
 def _on_vrm1_import(context: Any) -> None:
     on_vfx_import(context)
     on_materials_import(context)

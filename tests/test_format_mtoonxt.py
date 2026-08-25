@@ -353,7 +353,18 @@ class TestMtoonxtHooks(unittest.TestCase):
         relationship = MtoonxtStencilRelationship(
             writers=[1], readers=[0], show_writers_through_occluders=True
         )
-        document = {"materials": [{"name": "Reader"}, {"name": "Writer"}]}
+        document = {
+            "materials": [
+                {
+                    "name": "Reader",
+                    "extensions": {EXTENSION_MATERIALS_MTOON: {"specVersion": "1.0"}},
+                },
+                {
+                    "name": "Writer",
+                    "extensions": {EXTENSION_MATERIALS_MTOON: {"specVersion": "1.0"}},
+                },
+            ]
+        }
         export_context = SimpleNamespace(
             json_dict=document,
             material_name_to_index={"Reader": 0, "Writer": 1},

@@ -185,6 +185,9 @@ else:
         relationship_index: IntProperty(default=0, min=0)  # type: ignore[valid-type]
 
 
+_OWNS_RNA_REGISTRATION = False
+
+
 def body_op_needs_targets(op: str) -> bool:
     return op in CLIP_OPS
 
@@ -349,6 +352,31 @@ def relationships_from_scene(
     return result
 
 
+def validate_relationships_in_scene(scene: object | None = None) -> list[str]:
+    """Validate authored VRMXT relationship properties before serialization."""
+
+    if scene is None and bpy is not None:
+        scene = getattr(getattr(bpy, "context", None), "scene", None)
+    settings = getattr(scene, "vrmxt_mtoonxt_relationship_settings", None)
+    errors: list[str] = []
+    for index, item in enumerate(getattr(settings, "relationships", ()) or ()):
+        writers = iter_target_materials(getattr(item, "writers", None))
+        readers = iter_target_materials(getattr(item, "readers", None))
+        label = f"VRMXT stencil relationship {index + 1}"
+        if not writers:
+            errors.append(f"{label} has no writer material.")
+        if not readers:
+            errors.append(f"{label} has no reader material.")
+        writer_keys = {id(material) for material in writers}
+        if any(id(material) in writer_keys for material in readers):
+            errors.append(f"{label} uses the same material as writer and reader.")
+        if bool(getattr(item, "writers_only_inside_readers", False)) and bool(
+            getattr(item, "writers_only_outside_readers", False)
+        ):
+            errors.append(f"{label} cannot be both inside-only and outside-only.")
+    return list(dict.fromkeys(errors))
+
+
 def apply_parsed_relationships_to_scene(
     relationships: object,
     index_to_material: dict[int, object],
@@ -389,24 +417,46 @@ def apply_parsed_relationships_to_scene(
         settings.relationship_index = first_imported_index
 
 
-def register() -> None:
+def register() -> bool:
+    global _OWNS_RNA_REGISTRATION
     if bpy is None:
-        return
-    bpy.utils.register_class(VrmxtMtoonxtTarget)
-    bpy.utils.register_class(VrmxtMtoonxtSettings)
-    bpy.utils.register_class(VrmxtMtoonxtRelationshipMaterial)
-    bpy.utils.register_class(VrmxtMtoonxtRelationship)
-    bpy.utils.register_class(VrmxtMtoonxtSceneSettings)
-    bpy.types.Material.vrmxt_mtoonxt_settings = PointerProperty(  # type: ignore[attr-defined]
-        type=VrmxtMtoonxtSettings
+        return False
+    if hasattr(bpy.types.Scene, "vrmxt_mtoonxt_relationship_settings"):
+        # Another standalone or embedded copy already owns the shared RNA.
+        # Reuse it so both deployment modes can coexist without class clashes.
+        return False
+    classes = (
+        VrmxtMtoonxtTarget,
+        VrmxtMtoonxtSettings,
+        VrmxtMtoonxtRelationshipMaterial,
+        VrmxtMtoonxtRelationship,
+        VrmxtMtoonxtSceneSettings,
     )
-    bpy.types.Scene.vrmxt_mtoonxt_relationship_settings = PointerProperty(  # type: ignore[attr-defined]
-        type=VrmxtMtoonxtSceneSettings
-    )
+    registered = []
+    try:
+        for cls in classes:
+            bpy.utils.register_class(cls)
+            registered.append(cls)
+        bpy.types.Material.vrmxt_mtoonxt_settings = PointerProperty(  # type: ignore[attr-defined]
+            type=VrmxtMtoonxtSettings
+        )
+        bpy.types.Scene.vrmxt_mtoonxt_relationship_settings = PointerProperty(  # type: ignore[attr-defined]
+            type=VrmxtMtoonxtSceneSettings
+        )
+    except Exception:
+        for cls in reversed(registered):
+            with contextlib.suppress(RuntimeError):
+                bpy.utils.unregister_class(cls)
+        raise
+    _OWNS_RNA_REGISTRATION = True
+    return True
 
 
 def unregister() -> None:
+    global _OWNS_RNA_REGISTRATION
     if bpy is None:
+        return
+    if not _OWNS_RNA_REGISTRATION:
         return
     if hasattr(bpy.types.Material, "vrmxt_mtoonxt_settings"):
         del bpy.types.Material.vrmxt_mtoonxt_settings
@@ -421,6 +471,7 @@ def unregister() -> None:
     ):
         with contextlib.suppress(RuntimeError):
             bpy.utils.unregister_class(cls)
+    _OWNS_RNA_REGISTRATION = False
 
 
 __all__ = [
@@ -441,6 +492,7 @@ __all__ = [
     "iter_target_materials",
     "outline_op_needs_targets",
     "relationships_from_scene",
+    "validate_relationships_in_scene",
     "register",
     "unregister",
 ]
