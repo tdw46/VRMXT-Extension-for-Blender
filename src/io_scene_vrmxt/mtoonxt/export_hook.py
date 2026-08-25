@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Callable
+from typing import Any, Optional
 
 from ..common.json_util import as_dict, as_list
 from ..format.mtoonxt import (
@@ -26,6 +27,46 @@ from .property_group import (
 )
 
 logger = logging.getLogger(__name__)
+
+MtoonxtExportProvider = Callable[
+    [Any, dict[str, int], int], Optional[VrmxtMaterialsMtoonxt]
+]
+_EXTERNAL_EXPORT_PROVIDERS: list[MtoonxtExportProvider] = []
+
+
+def register_external_export_provider(provider: MtoonxtExportProvider) -> None:
+    """Register an optional host authoring provider.
+
+    A host such as Beyond VTuber Tools can embed this package without
+    duplicating VRMXT property groups. Providers are additive and run after the
+    standalone add-on's own material settings, so a host can fill or override
+    the body and outline stencil fields it owns.
+    """
+
+    if provider not in _EXTERNAL_EXPORT_PROVIDERS:
+        _EXTERNAL_EXPORT_PROVIDERS.append(provider)
+
+
+def unregister_external_export_provider(provider: MtoonxtExportProvider) -> None:
+    try:
+        _EXTERNAL_EXPORT_PROVIDERS.remove(provider)
+    except ValueError:
+        return
+
+
+def _merge_extra(
+    base: VrmxtMaterialsMtoonxt | None,
+    override: VrmxtMaterialsMtoonxt | None,
+) -> VrmxtMaterialsMtoonxt | None:
+    if override is None:
+        return base
+    if base is None:
+        return override
+    if override.stencil is not None:
+        base.stencil = override.stencil
+    if override.outline_stencil is not None:
+        base.outline_stencil = override.outline_stencil
+    return base
 
 
 def _find_material_by_name(material_name: str) -> Any | None:
@@ -87,26 +128,38 @@ def extra_from_blender_material(
     material_name_to_index: dict[str, int],
     own_index: int,
 ) -> VrmxtMaterialsMtoonxt | None:
+    extra = None
     settings = getattr(material, "vrmxt_mtoonxt_settings", None)
-    if settings is None:
-        return None
-    body = _stencil_from_settings(
-        str(getattr(settings, "body_op", BODY_OP_OFF) or BODY_OP_OFF),
-        getattr(settings, "body_targets", None),
-        material_name_to_index,
-        own_index,
-        allow_same=False,
-    )
-    outline = _stencil_from_settings(
-        str(getattr(settings, "outline_op", OUTLINE_OP_OFF) or OUTLINE_OP_OFF),
-        getattr(settings, "outline_targets", None),
-        material_name_to_index,
-        own_index,
-        allow_same=body is not None,
-    )
-    if body is None and outline is None:
-        return None
-    return VrmxtMaterialsMtoonxt(stencil=body, outline_stencil=outline)
+    if settings is not None:
+        body = _stencil_from_settings(
+            str(getattr(settings, "body_op", BODY_OP_OFF) or BODY_OP_OFF),
+            getattr(settings, "body_targets", None),
+            material_name_to_index,
+            own_index,
+            allow_same=False,
+        )
+        outline = _stencil_from_settings(
+            str(getattr(settings, "outline_op", OUTLINE_OP_OFF) or OUTLINE_OP_OFF),
+            getattr(settings, "outline_targets", None),
+            material_name_to_index,
+            own_index,
+            allow_same=body is not None,
+        )
+        if body is not None or outline is not None:
+            extra = VrmxtMaterialsMtoonxt(
+                stencil=body,
+                outline_stencil=outline,
+            )
+
+    for provider in tuple(_EXTERNAL_EXPORT_PROVIDERS):
+        try:
+            extra = _merge_extra(
+                extra,
+                provider(material, material_name_to_index, own_index),
+            )
+        except Exception:  # noqa: BLE001 - one host must not abort export
+            logger.exception("VRMXT external MToonXT export provider failed")
+    return extra
 
 
 def apply_mtoonxt_export(context: Any) -> None:
@@ -158,4 +211,11 @@ def on_vrm1_export(context: Any) -> None:
         logger.exception("VRMXT MToonXT export hook failed")
 
 
-__all__ = ["apply_mtoonxt_export", "on_vrm1_export"]
+__all__ = [
+    "MtoonxtExportProvider",
+    "apply_mtoonxt_export",
+    "extra_from_blender_material",
+    "on_vrm1_export",
+    "register_external_export_provider",
+    "unregister_external_export_provider",
+]
