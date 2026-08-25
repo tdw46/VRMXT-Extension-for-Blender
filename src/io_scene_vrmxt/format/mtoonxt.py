@@ -19,6 +19,7 @@ from ..common.json_util import (
     as_str,
     ensure_extensions_used,
     get_material_extension,
+    get_root_extension,
 )
 
 OP_WRITE = "write"
@@ -30,6 +31,31 @@ OP_SAME = "same"
 BODY_OPS = frozenset({OP_WRITE, OP_INSIDE, OP_INSIDE_OVERLAY, OP_OUTSIDE})
 OUTLINE_OPS = frozenset({OP_WRITE, OP_INSIDE, OP_INSIDE_OVERLAY, OP_OUTSIDE, OP_SAME})
 CLIP_OPS = frozenset({OP_INSIDE, OP_INSIDE_OVERLAY, OP_OUTSIDE})
+
+COMPARISON_INSIDE = "inside"
+COMPARISON_OUTSIDE = "outside"
+RELATIONSHIP_COMPARISONS = frozenset({COMPARISON_INSIDE, COMPARISON_OUTSIDE})
+
+DEPTH_NEVER = "never"
+DEPTH_LESS = "less"
+DEPTH_EQUAL = "equal"
+DEPTH_LESS_EQUAL = "lessEqual"
+DEPTH_GREATER = "greater"
+DEPTH_NOT_EQUAL = "notEqual"
+DEPTH_GREATER_EQUAL = "greaterEqual"
+DEPTH_ALWAYS = "always"
+DEPTH_TESTS = frozenset(
+    {
+        DEPTH_NEVER,
+        DEPTH_LESS,
+        DEPTH_EQUAL,
+        DEPTH_LESS_EQUAL,
+        DEPTH_GREATER,
+        DEPTH_NOT_EQUAL,
+        DEPTH_GREATER_EQUAL,
+        DEPTH_ALWAYS,
+    }
+)
 
 
 @dataclass
@@ -43,6 +69,22 @@ class VrmxtMaterialsMtoonxt:
     spec_version: str = SPEC_VERSION_1_0
     stencil: MtoonxtStencil | None = None
     outline_stencil: MtoonxtStencil | None = None
+
+
+@dataclass
+class MtoonxtStencilRelationship:
+    writers: list[int]
+    readers: list[int]
+    comparison: str = COMPARISON_OUTSIDE
+    show_writers_through_occluders: bool = False
+    writers_only_inside_readers: bool = False
+    writers_only_outside_readers: bool = False
+    writers_self_occlude: bool = True
+    ignore_occluded_reader_areas: bool = True
+    writers_write_depth: bool = True
+    readers_write_depth: bool = True
+    writer_depth_test: str = DEPTH_LESS_EQUAL
+    reader_depth_test: str = DEPTH_LESS_EQUAL
 
 
 def uses_materials_list(op: str) -> bool:
@@ -142,6 +184,174 @@ def serialize_mtoonxt(extension: VrmxtMaterialsMtoonxt) -> dict[str, Json]:
     return result
 
 
+def _parse_material_indices(
+    value: object,
+    *,
+    material_count: int | None,
+) -> list[int] | None:
+    items = as_list(value)
+    if items is None or not items:
+        return None
+    indices: list[int] = []
+    seen: set[int] = set()
+    for item in items:
+        index = as_int(item)
+        if index is None or index < 0:
+            return None
+        if material_count is not None and index >= material_count:
+            return None
+        if index not in seen:
+            seen.add(index)
+            indices.append(index)
+    return indices or None
+
+
+def _bool_or_default(obj: Mapping[str, Json], key: str, default: bool) -> bool | None:
+    value = obj.get(key, default)
+    return value if isinstance(value, bool) else None
+
+
+def parse_stencil_relationship(
+    value: object,
+    *,
+    material_count: int | None = None,
+) -> MtoonxtStencilRelationship | None:
+    obj = as_dict(value)
+    if obj is None:
+        return None
+    writers = _parse_material_indices(obj.get("writers"), material_count=material_count)
+    readers = _parse_material_indices(obj.get("readers"), material_count=material_count)
+    if writers is None or readers is None or set(writers).intersection(readers):
+        return None
+    comparison = as_str(obj.get("comparison", COMPARISON_OUTSIDE))
+    writer_depth_test = as_str(obj.get("writerDepthTest", DEPTH_LESS_EQUAL))
+    reader_depth_test = as_str(obj.get("readerDepthTest", DEPTH_LESS_EQUAL))
+    if comparison not in RELATIONSHIP_COMPARISONS:
+        return None
+    if writer_depth_test not in DEPTH_TESTS or reader_depth_test not in DEPTH_TESTS:
+        return None
+    values = {
+        "show_writers_through_occluders": _bool_or_default(
+            obj, "showWritersThroughOccluders", False
+        ),
+        "writers_only_inside_readers": _bool_or_default(
+            obj, "writersOnlyInsideReaders", False
+        ),
+        "writers_only_outside_readers": _bool_or_default(
+            obj, "writersOnlyOutsideReaders", False
+        ),
+        "writers_self_occlude": _bool_or_default(obj, "writersSelfOcclude", True),
+        "ignore_occluded_reader_areas": _bool_or_default(
+            obj, "ignoreOccludedReaderAreas", True
+        ),
+        "writers_write_depth": _bool_or_default(obj, "writersWriteDepth", True),
+        "readers_write_depth": _bool_or_default(obj, "readersWriteDepth", True),
+    }
+    if any(value is None for value in values.values()):
+        return None
+    if values["writers_only_inside_readers"] and values["writers_only_outside_readers"]:
+        return None
+    return MtoonxtStencilRelationship(
+        writers=writers,
+        readers=readers,
+        comparison=comparison,
+        writer_depth_test=writer_depth_test,
+        reader_depth_test=reader_depth_test,
+        **values,
+    )
+
+
+def parse_stencil_relationships(
+    json_dict: Mapping[str, Json],
+    *,
+    material_count: int | None = None,
+) -> list[MtoonxtStencilRelationship]:
+    extension = get_root_extension(json_dict, EXTENSION_MATERIALS_MTOONXT)
+    if extension is None or as_str(extension.get("specVersion")) != SPEC_VERSION_1_0:
+        return []
+    values = as_list(extension.get("stencilRelationships"))
+    if values is None:
+        return []
+    result: list[MtoonxtStencilRelationship] = []
+    for value in values:
+        relationship = parse_stencil_relationship(value, material_count=material_count)
+        if relationship is not None:
+            result.append(relationship)
+    return result
+
+
+def serialize_stencil_relationship(
+    relationship: MtoonxtStencilRelationship,
+) -> dict[str, Json]:
+    result: dict[str, Json] = {
+        "writers": list(relationship.writers),
+        "readers": list(relationship.readers),
+    }
+    optional = (
+        ("comparison", relationship.comparison, COMPARISON_OUTSIDE),
+        (
+            "showWritersThroughOccluders",
+            relationship.show_writers_through_occluders,
+            False,
+        ),
+        (
+            "writersOnlyInsideReaders",
+            relationship.writers_only_inside_readers,
+            False,
+        ),
+        (
+            "writersOnlyOutsideReaders",
+            relationship.writers_only_outside_readers,
+            False,
+        ),
+        ("writersSelfOcclude", relationship.writers_self_occlude, True),
+        (
+            "ignoreOccludedReaderAreas",
+            relationship.ignore_occluded_reader_areas,
+            True,
+        ),
+        ("writersWriteDepth", relationship.writers_write_depth, True),
+        ("readersWriteDepth", relationship.readers_write_depth, True),
+        ("writerDepthTest", relationship.writer_depth_test, DEPTH_LESS_EQUAL),
+        ("readerDepthTest", relationship.reader_depth_test, DEPTH_LESS_EQUAL),
+    )
+    for key, value, default in optional:
+        if value != default:
+            result[key] = value
+    return result
+
+
+def write_stencil_relationships(
+    json_dict: MutableMapping[str, Json],
+    relationships: Sequence[MtoonxtStencilRelationship],
+) -> None:
+    root_extensions = json_dict.get("extensions")
+    if not isinstance(root_extensions, dict):
+        root_extensions = {}
+        json_dict["extensions"] = root_extensions
+    if not relationships:
+        current = as_dict(root_extensions.get(EXTENSION_MATERIALS_MTOONXT))
+        if current is not None:
+            current.pop("stencilRelationships", None)
+            if set(current) <= {"specVersion"}:
+                root_extensions.pop(EXTENSION_MATERIALS_MTOONXT, None)
+        if not root_extensions:
+            json_dict.pop("extensions", None)
+        return
+    current = as_dict(root_extensions.get(EXTENSION_MATERIALS_MTOONXT))
+    if current is None:
+        current = {}
+        root_extensions[EXTENSION_MATERIALS_MTOONXT] = current
+    current["specVersion"] = SPEC_VERSION_1_0
+    serialized_relationships: list[dict[str, Json]] = []
+    for relationship in relationships:
+        serialized = serialize_stencil_relationship(relationship)
+        if serialized not in serialized_relationships:
+            serialized_relationships.append(serialized)
+    current["stencilRelationships"] = serialized_relationships
+    ensure_mtoonxt_extensions_used(json_dict)
+
+
 def write_mtoonxt_to_material_dict(
     material_dict: MutableMapping[str, Json],
     extension: VrmxtMaterialsMtoonxt,
@@ -223,7 +433,18 @@ def ensure_mtoonxt_extensions_used(json_dict: MutableMapping[str, Json]) -> None
 
 __all__ = [
     "BODY_OPS",
+    "COMPARISON_INSIDE",
+    "COMPARISON_OUTSIDE",
     "CLIP_OPS",
+    "DEPTH_ALWAYS",
+    "DEPTH_EQUAL",
+    "DEPTH_GREATER",
+    "DEPTH_GREATER_EQUAL",
+    "DEPTH_LESS",
+    "DEPTH_LESS_EQUAL",
+    "DEPTH_NEVER",
+    "DEPTH_NOT_EQUAL",
+    "DEPTH_TESTS",
     "OP_INSIDE",
     "OP_INSIDE_OVERLAY",
     "OP_OUTSIDE",
@@ -231,6 +452,7 @@ __all__ = [
     "OP_WRITE",
     "OUTLINE_OPS",
     "MtoonxtStencil",
+    "MtoonxtStencilRelationship",
     "VrmxtMaterialsMtoonxt",
     "clear_mtoonxt_from_material_dict",
     "drop_unresolvable_stencils",
@@ -239,10 +461,14 @@ __all__ = [
     "material_has_sibling_mtoon",
     "parse_mtoonxt",
     "parse_stencil",
+    "parse_stencil_relationship",
+    "parse_stencil_relationships",
     "read_mtoonxt_from_material",
     "serialize_mtoonxt",
     "serialize_stencil",
+    "serialize_stencil_relationship",
     "uses_materials_list",
     "write_mtoonxt_to_material_dict",
     "write_raw_mtoonxt_to_material_dict",
+    "write_stencil_relationships",
 ]

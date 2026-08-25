@@ -3,26 +3,44 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, Optional
 
-from .format.mtoonxt import VrmxtMaterialsMtoonxt
+from .format.mtoonxt import MtoonxtStencilRelationship, VrmxtMaterialsMtoonxt
 from .hooks import vrm1_hooks
 from .mtoonxt.export_hook import (
     register_external_export_provider,
+    register_external_relationship_export_provider,
     unregister_external_export_provider,
+    unregister_external_relationship_export_provider,
+)
+from .mtoonxt.import_hook import (
+    register_external_relationship_import_consumer,
+    unregister_external_relationship_import_consumer,
 )
 
 MtoonxtExportProvider = Callable[
     [Any, dict[str, int], int], Optional[VrmxtMaterialsMtoonxt]
 ]
+MtoonxtRelationshipExportProvider = Callable[
+    [Any, dict[str, int]], Sequence[MtoonxtStencilRelationship]
+]
+MtoonxtRelationshipImportConsumer = Callable[
+    [Any, Sequence[MtoonxtStencilRelationship]], None
+]
 _EMBEDDED_PROVIDER: MtoonxtExportProvider | None = None
+_EMBEDDED_RELATIONSHIP_PROVIDER: MtoonxtRelationshipExportProvider | None = None
+_EMBEDDED_RELATIONSHIP_CONSUMER: MtoonxtRelationshipImportConsumer | None = None
 _EMBEDDED_HOOKS_REGISTERED = False
 
 
 def register_embedded(
     *,
     mtoonxt_export_provider: MtoonxtExportProvider | None = None,
+    mtoonxt_relationship_export_provider: MtoonxtRelationshipExportProvider
+    | None = None,
+    mtoonxt_relationship_import_consumer: MtoonxtRelationshipImportConsumer
+    | None = None,
     register_vrm1_hooks: bool = True,
 ) -> None:
     """Register the package as a dependency without its standalone UI/RNA.
@@ -32,12 +50,29 @@ def register_embedded(
     classes when the standalone add-on is installed separately.
     """
 
-    global _EMBEDDED_PROVIDER, _EMBEDDED_HOOKS_REGISTERED
+    global _EMBEDDED_HOOKS_REGISTERED
+    global _EMBEDDED_PROVIDER
+    global _EMBEDDED_RELATIONSHIP_CONSUMER
+    global _EMBEDDED_RELATIONSHIP_PROVIDER
     if _EMBEDDED_PROVIDER is not None:
         unregister_external_export_provider(_EMBEDDED_PROVIDER)
     _EMBEDDED_PROVIDER = mtoonxt_export_provider
     if _EMBEDDED_PROVIDER is not None:
         register_external_export_provider(_EMBEDDED_PROVIDER)
+    if _EMBEDDED_RELATIONSHIP_PROVIDER is not None:
+        unregister_external_relationship_export_provider(
+            _EMBEDDED_RELATIONSHIP_PROVIDER
+        )
+    _EMBEDDED_RELATIONSHIP_PROVIDER = mtoonxt_relationship_export_provider
+    if _EMBEDDED_RELATIONSHIP_PROVIDER is not None:
+        register_external_relationship_export_provider(_EMBEDDED_RELATIONSHIP_PROVIDER)
+    if _EMBEDDED_RELATIONSHIP_CONSUMER is not None:
+        unregister_external_relationship_import_consumer(
+            _EMBEDDED_RELATIONSHIP_CONSUMER
+        )
+    _EMBEDDED_RELATIONSHIP_CONSUMER = mtoonxt_relationship_import_consumer
+    if _EMBEDDED_RELATIONSHIP_CONSUMER is not None:
+        register_external_relationship_import_consumer(_EMBEDDED_RELATIONSHIP_CONSUMER)
     if register_vrm1_hooks and not _EMBEDDED_HOOKS_REGISTERED:
         vrm1_hooks.register()
         _EMBEDDED_HOOKS_REGISTERED = vrm1_hooks.hooks_available()
@@ -46,17 +81,32 @@ def register_embedded(
 def unregister_embedded() -> None:
     """Reverse only registrations created by :func:`register_embedded`."""
 
-    global _EMBEDDED_PROVIDER, _EMBEDDED_HOOKS_REGISTERED
+    global _EMBEDDED_HOOKS_REGISTERED
+    global _EMBEDDED_PROVIDER
+    global _EMBEDDED_RELATIONSHIP_CONSUMER
+    global _EMBEDDED_RELATIONSHIP_PROVIDER
     if _EMBEDDED_HOOKS_REGISTERED:
         vrm1_hooks.unregister()
         _EMBEDDED_HOOKS_REGISTERED = False
     if _EMBEDDED_PROVIDER is not None:
         unregister_external_export_provider(_EMBEDDED_PROVIDER)
         _EMBEDDED_PROVIDER = None
+    if _EMBEDDED_RELATIONSHIP_PROVIDER is not None:
+        unregister_external_relationship_export_provider(
+            _EMBEDDED_RELATIONSHIP_PROVIDER
+        )
+        _EMBEDDED_RELATIONSHIP_PROVIDER = None
+    if _EMBEDDED_RELATIONSHIP_CONSUMER is not None:
+        unregister_external_relationship_import_consumer(
+            _EMBEDDED_RELATIONSHIP_CONSUMER
+        )
+        _EMBEDDED_RELATIONSHIP_CONSUMER = None
 
 
 __all__ = [
     "MtoonxtExportProvider",
+    "MtoonxtRelationshipExportProvider",
+    "MtoonxtRelationshipImportConsumer",
     "register_embedded",
     "unregister_embedded",
 ]

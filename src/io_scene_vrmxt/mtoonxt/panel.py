@@ -81,6 +81,46 @@ def draw_mtoonxt_layout(layout: UILayout, material: object) -> None:
     help_box.label(text="This viewport does not clip.")
 
 
+def _draw_relationship_materials(layout: UILayout, item: object, side: str) -> None:
+    collection = item.writers if side == "WRITER" else item.readers
+    box = layout.box()
+    box.label(text="Writers" if side == "WRITER" else "Readers")
+    for index, target in enumerate(collection):
+        row = box.row(align=True)
+        row.prop(target, "material", text="")
+        op = row.operator(
+            "vrmxt.mtoonxt_remove_relationship_material", text="", icon="X"
+        )
+        op.side = side
+        op.target_index = index
+    op = box.operator("vrmxt.mtoonxt_add_relationship_material", icon="ADD")
+    op.side = side
+
+
+def draw_relationship_layout(layout: UILayout, settings: object) -> None:
+    row = layout.row(align=True)
+    row.operator("vrmxt.mtoonxt_add_relationship", text="", icon="ADD")
+    row.operator("vrmxt.mtoonxt_remove_relationship", text="", icon="REMOVE")
+    if not settings.relationships:
+        layout.label(text="No stencil relationships")
+        return
+    row.prop(settings, "relationship_index", text="Relationship")
+    index = min(settings.relationship_index, len(settings.relationships) - 1)
+    item = settings.relationships[index]
+    _draw_relationship_materials(layout, item, "WRITER")
+    _draw_relationship_materials(layout, item, "READER")
+    layout.prop(item, "comparison")
+    layout.prop(item, "show_writers_through_occluders")
+    layout.prop(item, "writers_only_inside_readers")
+    layout.prop(item, "writers_only_outside_readers")
+    layout.prop(item, "writers_self_occlude")
+    layout.prop(item, "ignore_occluded_reader_areas")
+    layout.prop(item, "writers_write_depth")
+    layout.prop(item, "readers_write_depth")
+    layout.prop(item, "writer_depth_test")
+    layout.prop(item, "reader_depth_test")
+
+
 if bpy is not None:
 
     class VRMXT_PT_mtoonxt_stencil(Panel):
@@ -105,9 +145,30 @@ if bpy is not None:
                 return
             draw_mtoonxt_layout(self.layout, material)
 
-    CLASSES = (VRMXT_PT_mtoonxt_stencil,)
+    class VRMXT_PT_mtoonxt_stencil_relationships(Panel):
+        bl_idname = "VRMXT_PT_mtoonxt_stencil_relationships"
+        bl_label = "MToonXT stencil relationships"
+        bl_space_type = "PROPERTIES"
+        bl_region_type = "WINDOW"
+        bl_context = "scene"
+        bl_options: ClassVar[set[str]] = {"DEFAULT_CLOSED"}
+
+        def draw(self, context: Context) -> None:
+            settings = getattr(
+                context.scene, "vrmxt_mtoonxt_relationship_settings", None
+            )
+            if settings is None:
+                self.layout.label(text="MToonXT relationship settings unavailable")
+                return
+            draw_relationship_layout(self.layout, settings)
+
+    CLASSES = (
+        VRMXT_PT_mtoonxt_stencil,
+        VRMXT_PT_mtoonxt_stencil_relationships,
+    )
 else:  # pragma: no cover
     VRMXT_PT_mtoonxt_stencil = None  # type: ignore[misc, assignment]
+    VRMXT_PT_mtoonxt_stencil_relationships = None  # type: ignore[misc, assignment]
     CLASSES = ()
 
 
@@ -128,6 +189,8 @@ def unregister() -> None:
 
 __all__ = [
     "VRMXT_PT_mtoonxt_stencil",
+    "VRMXT_PT_mtoonxt_stencil_relationships",
+    "draw_relationship_layout",
     "draw_mtoonxt_layout",
     "register",
     "unregister",

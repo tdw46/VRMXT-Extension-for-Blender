@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, Optional
 
 from ..common.json_util import as_dict, as_list
@@ -13,12 +13,14 @@ from ..format.mtoonxt import (
     OP_SAME,
     OP_WRITE,
     MtoonxtStencil,
+    MtoonxtStencilRelationship,
     VrmxtMaterialsMtoonxt,
     clear_mtoonxt_from_material_dict,
     drop_unresolvable_stencils,
     ensure_mtoonxt_extensions_used,
     material_has_sibling_mtoon,
     write_mtoonxt_to_material_dict,
+    write_stencil_relationships,
 )
 from .property_group import (
     BODY_OP_OFF,
@@ -31,7 +33,11 @@ logger = logging.getLogger(__name__)
 MtoonxtExportProvider = Callable[
     [Any, dict[str, int], int], Optional[VrmxtMaterialsMtoonxt]
 ]
+MtoonxtRelationshipExportProvider = Callable[
+    [Any, dict[str, int]], Sequence[MtoonxtStencilRelationship]
+]
 _EXTERNAL_EXPORT_PROVIDERS: list[MtoonxtExportProvider] = []
+_EXTERNAL_RELATIONSHIP_EXPORT_PROVIDERS: list[MtoonxtRelationshipExportProvider] = []
 
 
 def register_external_export_provider(provider: MtoonxtExportProvider) -> None:
@@ -50,6 +56,22 @@ def register_external_export_provider(provider: MtoonxtExportProvider) -> None:
 def unregister_external_export_provider(provider: MtoonxtExportProvider) -> None:
     try:
         _EXTERNAL_EXPORT_PROVIDERS.remove(provider)
+    except ValueError:
+        return
+
+
+def register_external_relationship_export_provider(
+    provider: MtoonxtRelationshipExportProvider,
+) -> None:
+    if provider not in _EXTERNAL_RELATIONSHIP_EXPORT_PROVIDERS:
+        _EXTERNAL_RELATIONSHIP_EXPORT_PROVIDERS.append(provider)
+
+
+def unregister_external_relationship_export_provider(
+    provider: MtoonxtRelationshipExportProvider,
+) -> None:
+    try:
+        _EXTERNAL_RELATIONSHIP_EXPORT_PROVIDERS.remove(provider)
     except ValueError:
         return
 
@@ -200,7 +222,21 @@ def apply_mtoonxt_export(context: Any) -> None:
         write_mtoonxt_to_material_dict(material_dict, extra)
         wrote_any = True
 
-    if wrote_any:
+    relationships: list[MtoonxtStencilRelationship] = []
+    try:
+        from .property_group import relationships_from_scene
+
+        relationships.extend(relationships_from_scene(name_to_index))
+    except Exception:  # noqa: BLE001 - standalone RNA is optional in embedded mode
+        logger.debug("VRMXT standalone relationship export unavailable", exc_info=True)
+    for provider in tuple(_EXTERNAL_RELATIONSHIP_EXPORT_PROVIDERS):
+        try:
+            relationships.extend(provider(context, name_to_index))
+        except Exception:  # noqa: BLE001 - one host must not abort export
+            logger.exception("VRMXT external stencil relationship provider failed")
+    write_stencil_relationships(json_dict, relationships)
+
+    if wrote_any or relationships:
         ensure_mtoonxt_extensions_used(json_dict)
 
 
@@ -213,9 +249,12 @@ def on_vrm1_export(context: Any) -> None:
 
 __all__ = [
     "MtoonxtExportProvider",
+    "MtoonxtRelationshipExportProvider",
     "apply_mtoonxt_export",
     "extra_from_blender_material",
     "on_vrm1_export",
     "register_external_export_provider",
+    "register_external_relationship_export_provider",
     "unregister_external_export_provider",
+    "unregister_external_relationship_export_provider",
 ]

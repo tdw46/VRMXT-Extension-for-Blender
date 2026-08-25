@@ -14,17 +14,21 @@ from io_scene_vrmxt.common.constants import (
     SPEC_VERSION_1_0,
 )
 from io_scene_vrmxt.format.mtoonxt import (
+    DEPTH_ALWAYS,
     OP_INSIDE,
     OP_INSIDE_OVERLAY,
     OP_SAME,
     OP_WRITE,
     MtoonxtStencil,
+    MtoonxtStencilRelationship,
     VrmxtMaterialsMtoonxt,
     drop_unresolvable_stencils,
     listed_writers_have_body_write,
     parse_mtoonxt,
+    parse_stencil_relationships,
     read_mtoonxt_from_material,
     serialize_mtoonxt,
+    write_stencil_relationships,
 )
 from io_scene_vrmxt.mtoonxt.export_hook import (
     apply_mtoonxt_export,
@@ -200,6 +204,51 @@ class TestFormatMtoonxt(unittest.TestCase):
         self.assertEqual(extra.stencil.op, OP_WRITE)
         self.assertEqual(extra.outline_stencil.op, OP_SAME)
 
+    def test_root_relationship_round_trip_and_defaults(self) -> None:
+        document = {"materials": [{}, {}]}
+        relationship = MtoonxtStencilRelationship(
+            writers=[1],
+            readers=[0],
+            show_writers_through_occluders=True,
+            writers_self_occlude=False,
+            writers_write_depth=False,
+            writer_depth_test=DEPTH_ALWAYS,
+        )
+        write_stencil_relationships(document, [relationship])
+        payload = document["extensions"][EXTENSION_MATERIALS_MTOONXT]
+        self.assertNotIn("readersWriteDepth", payload["stencilRelationships"][0])
+        parsed = parse_stencil_relationships(document, material_count=2)
+        self.assertEqual(parsed, [relationship])
+        self.assertIn(EXTENSION_MATERIALS_MTOONXT, document["extensionsUsed"])
+
+        write_stencil_relationships(document, [relationship, relationship])
+        payload = document["extensions"][EXTENSION_MATERIALS_MTOONXT]
+        self.assertEqual(len(payload["stencilRelationships"]), 1)
+
+    def test_root_relationship_skips_invalid_entries_individually(self) -> None:
+        document = {
+            "materials": [{}, {}, {}],
+            "extensions": {
+                EXTENSION_MATERIALS_MTOONXT: {
+                    "specVersion": "1.0",
+                    "stencilRelationships": [
+                        {"writers": [0], "readers": [1]},
+                        {"writers": [0], "readers": [0]},
+                        {
+                            "writers": [2],
+                            "readers": [1],
+                            "writersOnlyInsideReaders": True,
+                            "writersOnlyOutsideReaders": True,
+                        },
+                    ],
+                }
+            },
+        }
+        parsed = parse_stencil_relationships(document, material_count=3)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0].writers, [0])
+        self.assertEqual(parsed[0].readers, [1])
+
 
 class TestMtoonxtHooks(unittest.TestCase):
     def test_external_provider_overrides_standalone_body(self) -> None:
@@ -296,6 +345,43 @@ class TestMtoonxtHooks(unittest.TestCase):
         self.assertEqual(bone.vrmxt_mtoonxt_settings.body_op, OP_INSIDE_OVERLAY)
         self.assertEqual(list(bone.vrmxt_mtoonxt_settings.body_targets), [suit])
         self.assertEqual(bone.vrmxt_mtoonxt_settings.outline_op, OP_SAME)
+
+    def test_external_root_relationship_export_and_import(self) -> None:
+        import io_scene_vrmxt.mtoonxt.export_hook as export_hook
+        import io_scene_vrmxt.mtoonxt.import_hook as import_hook
+
+        relationship = MtoonxtStencilRelationship(
+            writers=[1], readers=[0], show_writers_through_occluders=True
+        )
+        document = {"materials": [{"name": "Reader"}, {"name": "Writer"}]}
+        export_context = SimpleNamespace(
+            json_dict=document,
+            material_name_to_index={"Reader": 0, "Writer": 1},
+        )
+
+        def provider(_context, _indices):
+            return [relationship]
+
+        received: list[MtoonxtStencilRelationship] = []
+
+        def consumer(_context, values):
+            received.extend(values)
+
+        export_hook.register_external_relationship_export_provider(provider)
+        import_hook.register_external_relationship_import_consumer(consumer)
+        try:
+            export_hook.apply_mtoonxt_export(export_context)
+            import_hook.apply_mtoonxt_import(
+                SimpleNamespace(
+                    json_dict=document,
+                    material_index_to_material={},
+                    scene=None,
+                )
+            )
+        finally:
+            export_hook.unregister_external_relationship_export_provider(provider)
+            import_hook.unregister_external_relationship_import_consumer(consumer)
+        self.assertEqual(received, [relationship])
 
     def test_export_writes_indices_and_skips_missing_mtoon(self) -> None:
         white_settings = _FakeSettings()
