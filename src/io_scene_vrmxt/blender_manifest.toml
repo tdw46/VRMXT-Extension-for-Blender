@@ -4,7 +4,7 @@ id = "vrmxt"
 version = "0.3.0"
 
 name = "VRMXT Extensions"
-tagline = "Optional VRMXT_* authoring for Extended VRM"
+tagline = "Author and round-trip Extended VRM metadata"
 maintainer = "Mira Luna"
 type = "add-on"
 
@@ -20,4 +20,11 @@ license = ["SPDX:MIT"]
 copyright = [
   "2026 Mira Luna",
   "2026 Beyond Dev (Tyler Walker)",
+]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "*.pyc",
+  "*.pyo",
 ]
