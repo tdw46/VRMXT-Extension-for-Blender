@@ -26,7 +26,12 @@ from io_scene_vrmxt.format.mtoonxt import (
     read_mtoonxt_from_material,
     serialize_mtoonxt,
 )
-from io_scene_vrmxt.mtoonxt.export_hook import apply_mtoonxt_export
+from io_scene_vrmxt.mtoonxt.export_hook import (
+    apply_mtoonxt_export,
+    extra_from_blender_material,
+    register_external_export_provider,
+    unregister_external_export_provider,
+)
 from io_scene_vrmxt.mtoonxt.import_hook import apply_mtoonxt_import
 
 RESOURCES = Path(__file__).resolve().parent / "resources" / "gltf"
@@ -197,6 +202,30 @@ class TestFormatMtoonxt(unittest.TestCase):
 
 
 class TestMtoonxtHooks(unittest.TestCase):
+    def test_external_provider_overrides_standalone_body(self) -> None:
+        settings = _FakeSettings()
+        settings.body_op = OP_WRITE
+        material = _Mat("Face", settings)
+
+        def provider(_material, _name_to_index, _own_index):
+            return VrmxtMaterialsMtoonxt(
+                stencil=MtoonxtStencil(op=OP_INSIDE, materials=[1])
+            )
+
+        register_external_export_provider(provider)
+        try:
+            extra = extra_from_blender_material(
+                material,
+                {"Face": 0, "Mask": 1},
+                0,
+            )
+        finally:
+            unregister_external_export_provider(provider)
+        self.assertIsNotNone(extra)
+        assert extra is not None and extra.stencil is not None
+        self.assertEqual(extra.stencil.op, OP_INSIDE)
+        self.assertEqual(extra.stencil.materials, [1])
+
     def test_import_maps_writer_pointers(self) -> None:
         iris = SimpleNamespace(vrmxt_mtoonxt_settings=_FakeSettings())
         white = SimpleNamespace(vrmxt_mtoonxt_settings=_FakeSettings())

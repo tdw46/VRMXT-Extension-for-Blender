@@ -28,6 +28,21 @@ MToonXT stencil.
 2. Install this extension (`id = vrmxt`, module `io_scene_vrmxt`).
 3. Enable **VRMXT Extensions**.
 
+## Embedded dependency mode
+
+The same source tree can be vendored under another Blender extension. In that
+mode, import the vendored package by its nested package name and call
+`integration.register_embedded(...)`. Embedded registration deliberately omits
+VRMXT's standalone panels, operators, and RNA property groups so the host can
+own its UI and persisted authoring data without class collisions. The shared
+format parser, serializer, VRM 1 hook adapter, and portable GLB patcher remain
+available in both modes.
+
+`portable_exporter.patch_exported_vrm()` wraps an installed VRM exporter rather
+than replacing it: the host exports its normal VRM first, then atomically adds
+VRMXT JSON to the completed GLB. Original VRM materials and all stock
+extensions remain authoritative.
+
 ## Development
 
 ```bash
