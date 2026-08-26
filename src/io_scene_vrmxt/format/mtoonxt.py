@@ -81,6 +81,7 @@ class MtoonxtStencilRelationship:
     writers_only_outside_readers: bool = False
     writers_self_occlude: bool = True
     ignore_occluded_reader_areas: bool = True
+    writers_write_color: bool = True
     writers_write_depth: bool = True
     readers_write_depth: bool = True
     writer_depth_test: str = DEPTH_LESS_EQUAL
@@ -244,6 +245,7 @@ def parse_stencil_relationship(
         "ignore_occluded_reader_areas": _bool_or_default(
             obj, "ignoreOccludedReaderAreas", True
         ),
+        "writers_write_color": _bool_or_default(obj, "writersWriteColor", True),
         "writers_write_depth": _bool_or_default(obj, "writersWriteDepth", True),
         "readers_write_depth": _bool_or_default(obj, "readersWriteDepth", True),
     }
@@ -310,6 +312,7 @@ def serialize_stencil_relationship(
             relationship.ignore_occluded_reader_areas,
             True,
         ),
+        ("writersWriteColor", relationship.writers_write_color, True),
         ("writersWriteDepth", relationship.writers_write_depth, True),
         ("readersWriteDepth", relationship.readers_write_depth, True),
         ("writerDepthTest", relationship.writer_depth_test, DEPTH_LESS_EQUAL),
@@ -318,6 +321,68 @@ def serialize_stencil_relationship(
     for key, value, default in optional:
         if value != default:
             result[key] = value
+    return result
+
+
+def coalesce_stencil_relationships(
+    relationships: Sequence[MtoonxtStencilRelationship],
+) -> list[MtoonxtStencilRelationship]:
+    """Merge identical writer presentations by unioning their reader materials.
+
+    One material pass can stamp one stencil reference. Keeping equivalent rows with
+    the same writers but disjoint readers would make a consumer's later row replace
+    the earlier stencil state. The schema already supports reader arrays, so emit one
+    relationship instead.
+    """
+
+    result: list[MtoonxtStencilRelationship] = []
+    by_key: dict[tuple[object, ...], MtoonxtStencilRelationship] = {}
+    for relationship in relationships:
+        key = (
+            tuple(sorted(set(relationship.writers))),
+            relationship.comparison,
+            relationship.show_writers_through_occluders,
+            relationship.writers_only_inside_readers,
+            relationship.writers_only_outside_readers,
+            relationship.writers_self_occlude,
+            relationship.ignore_occluded_reader_areas,
+            relationship.writers_write_color,
+            relationship.writers_write_depth,
+            relationship.readers_write_depth,
+            relationship.writer_depth_test,
+            relationship.reader_depth_test,
+        )
+        existing = by_key.get(key)
+        if existing is None:
+            existing = MtoonxtStencilRelationship(
+                writers=list(dict.fromkeys(relationship.writers)),
+                readers=list(dict.fromkeys(relationship.readers)),
+                comparison=relationship.comparison,
+                show_writers_through_occluders=(
+                    relationship.show_writers_through_occluders
+                ),
+                writers_only_inside_readers=(
+                    relationship.writers_only_inside_readers
+                ),
+                writers_only_outside_readers=(
+                    relationship.writers_only_outside_readers
+                ),
+                writers_self_occlude=relationship.writers_self_occlude,
+                ignore_occluded_reader_areas=(
+                    relationship.ignore_occluded_reader_areas
+                ),
+                writers_write_color=relationship.writers_write_color,
+                writers_write_depth=relationship.writers_write_depth,
+                readers_write_depth=relationship.readers_write_depth,
+                writer_depth_test=relationship.writer_depth_test,
+                reader_depth_test=relationship.reader_depth_test,
+            )
+            by_key[key] = existing
+            result.append(existing)
+            continue
+        for reader in relationship.readers:
+            if reader not in existing.readers and reader not in existing.writers:
+                existing.readers.append(reader)
     return result
 
 
@@ -344,7 +409,7 @@ def write_stencil_relationships(
         root_extensions[EXTENSION_MATERIALS_MTOONXT] = current
     current["specVersion"] = SPEC_VERSION_1_0
     serialized_relationships: list[dict[str, Json]] = []
-    for relationship in relationships:
+    for relationship in coalesce_stencil_relationships(relationships):
         serialized = serialize_stencil_relationship(relationship)
         if serialized not in serialized_relationships:
             serialized_relationships.append(serialized)

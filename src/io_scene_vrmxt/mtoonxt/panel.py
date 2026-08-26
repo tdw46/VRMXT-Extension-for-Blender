@@ -115,6 +115,7 @@ def draw_relationship_layout(layout: UILayout, settings: object) -> None:
     layout.prop(item, "writers_only_outside_readers")
     layout.prop(item, "writers_self_occlude")
     layout.prop(item, "ignore_occluded_reader_areas")
+    layout.prop(item, "writers_write_color")
     layout.prop(item, "writers_write_depth")
     layout.prop(item, "readers_write_depth")
     layout.prop(item, "writer_depth_test")

@@ -165,6 +165,9 @@ else:
         ignore_occluded_reader_areas: BoolProperty(  # type: ignore[valid-type]
             name="Ignore Occluded Reader Areas", default=True
         )
+        writers_write_color: BoolProperty(  # type: ignore[valid-type]
+            name="Writers Write Color", default=True
+        )
         writers_write_depth: BoolProperty(  # type: ignore[valid-type]
             name="Writers Write Depth", default=True
         )
@@ -343,6 +346,7 @@ def relationships_from_scene(
                 writers_only_outside_readers=bool(item.writers_only_outside_readers),
                 writers_self_occlude=bool(item.writers_self_occlude),
                 ignore_occluded_reader_areas=bool(item.ignore_occluded_reader_areas),
+                writers_write_color=bool(item.writers_write_color),
                 writers_write_depth=bool(item.writers_write_depth),
                 readers_write_depth=bool(item.readers_write_depth),
                 writer_depth_test=str(item.writer_depth_test),
@@ -409,6 +413,7 @@ def apply_parsed_relationships_to_scene(
         item.writers_only_outside_readers = relationship.writers_only_outside_readers
         item.writers_self_occlude = relationship.writers_self_occlude
         item.ignore_occluded_reader_areas = relationship.ignore_occluded_reader_areas
+        item.writers_write_color = relationship.writers_write_color
         item.writers_write_depth = relationship.writers_write_depth
         item.readers_write_depth = relationship.readers_write_depth
         item.writer_depth_test = relationship.writer_depth_test

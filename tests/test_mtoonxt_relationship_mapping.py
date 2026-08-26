@@ -56,6 +56,20 @@ class RelationshipMappingTest(unittest.TestCase):
         self.assertFalse(errors)
         self.assertEqual(extras, [None, None])
 
+    def test_colorless_writer_has_no_lossy_shorthand(self) -> None:
+        extras, errors = relationship_shorthand_extras(
+            [
+                MtoonxtStencilRelationship(
+                    writers=[0],
+                    readers=[1],
+                    writers_write_color=False,
+                )
+            ],
+            material_count=2,
+        )
+        self.assertFalse(errors)
+        self.assertEqual(extras, [None, None])
+
     def test_conflicting_material_roles_report_error(self) -> None:
         extras, errors = relationship_shorthand_extras(
             [

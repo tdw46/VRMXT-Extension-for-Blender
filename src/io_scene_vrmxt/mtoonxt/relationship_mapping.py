@@ -50,6 +50,7 @@ def relationship_uses_advanced_presentation(
     return (
         not relationship.writers_self_occlude
         or not relationship.ignore_occluded_reader_areas
+        or not relationship.writers_write_color
         or not relationship.writers_write_depth
         or not relationship.readers_write_depth
         or relationship.writer_depth_test != DEPTH_LESS_EQUAL

@@ -23,6 +23,7 @@ from io_scene_vrmxt.format.mtoonxt import (
     MtoonxtStencilRelationship,
     VrmxtMaterialsMtoonxt,
     drop_unresolvable_stencils,
+    coalesce_stencil_relationships,
     listed_writers_have_body_write,
     parse_mtoonxt,
     parse_stencil_relationships,
@@ -211,11 +212,13 @@ class TestFormatMtoonxt(unittest.TestCase):
             readers=[0],
             show_writers_through_occluders=True,
             writers_self_occlude=False,
+            writers_write_color=False,
             writers_write_depth=False,
             writer_depth_test=DEPTH_ALWAYS,
         )
         write_stencil_relationships(document, [relationship])
         payload = document["extensions"][EXTENSION_MATERIALS_MTOONXT]
+        self.assertFalse(payload["stencilRelationships"][0]["writersWriteColor"])
         self.assertNotIn("readersWriteDepth", payload["stencilRelationships"][0])
         parsed = parse_stencil_relationships(document, material_count=2)
         self.assertEqual(parsed, [relationship])
@@ -224,6 +227,22 @@ class TestFormatMtoonxt(unittest.TestCase):
         write_stencil_relationships(document, [relationship, relationship])
         payload = document["extensions"][EXTENSION_MATERIALS_MTOONXT]
         self.assertEqual(len(payload["stencilRelationships"]), 1)
+
+    def test_equivalent_writer_relationships_coalesce_readers(self) -> None:
+        relationships = coalesce_stencil_relationships(
+            [
+                MtoonxtStencilRelationship(
+                    writers=[0], readers=[1], writers_write_color=False
+                ),
+                MtoonxtStencilRelationship(
+                    writers=[0], readers=[2], writers_write_color=False
+                ),
+            ]
+        )
+        self.assertEqual(len(relationships), 1)
+        self.assertEqual(relationships[0].writers, [0])
+        self.assertEqual(relationships[0].readers, [1, 2])
+        self.assertFalse(relationships[0].writers_write_color)
 
     def test_root_relationship_skips_invalid_entries_individually(self) -> None:
         document = {

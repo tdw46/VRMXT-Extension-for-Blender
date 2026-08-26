@@ -151,6 +151,9 @@ def sync_bvt_scene_to_vrmxt(scene: object) -> bool:
             target.ignore_occluded_reader_areas = bool(
                 getattr(source, "ignore_occluded_reader_areas", True)
             )
+            target.writers_write_color = bool(
+                getattr(source, "writers_write_color", True)
+            )
             target.writers_write_depth = bool(
                 getattr(source, "writers_write_depth", True)
             )
@@ -214,6 +217,7 @@ def sync_vrmxt_scene_to_bvt(scene: object) -> bool:
                     target.ignore_occluded_reader_areas = bool(
                         source.ignore_occluded_reader_areas
                     )
+                    target.writers_write_color = bool(source.writers_write_color)
                     target.writers_write_depth = bool(source.writers_write_depth)
                     target.readers_write_depth = bool(source.readers_write_depth)
                     target.writer_ztest = _VRMXT_TO_BVT_DEPTH.get(
