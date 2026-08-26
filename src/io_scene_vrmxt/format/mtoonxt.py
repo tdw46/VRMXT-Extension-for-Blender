@@ -361,9 +361,7 @@ def coalesce_stencil_relationships(
                 show_writers_through_occluders=(
                     relationship.show_writers_through_occluders
                 ),
-                writers_only_inside_readers=(
-                    relationship.writers_only_inside_readers
-                ),
+                writers_only_inside_readers=(relationship.writers_only_inside_readers),
                 writers_only_outside_readers=(
                     relationship.writers_only_outside_readers
                 ),
