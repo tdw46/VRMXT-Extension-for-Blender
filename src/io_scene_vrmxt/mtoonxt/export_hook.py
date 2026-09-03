@@ -194,13 +194,18 @@ def apply_mtoonxt_export(context: Any) -> None:
     name_to_index: dict[str, int] = dict(
         getattr(context, "material_name_to_index", {}) or {}
     )
+    material_index_to_material = dict(
+        getattr(context, "material_index_to_material", {}) or {}
+    )
     count = len(materials_raw)
     extras: list[VrmxtMaterialsMtoonxt | None] = [None] * count
 
     for material_name, material_index in name_to_index.items():
         if material_index < 0 or material_index >= count:
             continue
-        blender_material = _find_material_by_name(material_name)
+        blender_material = material_index_to_material.get(material_index)
+        if blender_material is None:
+            blender_material = _find_material_by_name(material_name)
         if blender_material is None:
             continue
         extras[material_index] = extra_from_blender_material(

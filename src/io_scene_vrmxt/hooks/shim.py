@@ -48,6 +48,24 @@ def blender_context() -> Any:
     return bpy.context
 
 
+def scene_for_armature(armature: Any, context: Any) -> Any:
+    context_scene = getattr(context, "scene", None)
+    if context_scene is not None:
+        scene_objects = getattr(context_scene, "objects", ())
+        armature_name = getattr(armature, "name", None)
+        try:
+            if armature in scene_objects or (
+                isinstance(armature_name, str) and armature_name in scene_objects
+            ):
+                return context_scene
+        except (ReferenceError, TypeError):
+            pass
+    for scene in tuple(getattr(armature, "users_scene", ()) or ()):
+        if scene is not None:
+            return scene
+    return context_scene
+
+
 def make_import_context(
     json_chunk: Mapping[str, Any],
     armature: Any,
@@ -76,9 +94,11 @@ def make_export_context(
     image_index_to_image: Mapping[int, Any],
     material_index_to_material: Mapping[int, Any],
 ) -> SimpleNamespace:
+    context = blender_context()
     buffer0 = bin_chunk if isinstance(bin_chunk, bytearray) else None
     return SimpleNamespace(
-        context=blender_context(),
+        context=context,
+        scene=scene_for_armature(armature, context),
         armature=armature,
         json_dict=json_chunk,
         buffer0=buffer0,
@@ -96,4 +116,5 @@ __all__ = [
     "make_export_context",
     "make_import_context",
     "names_from_index_map",
+    "scene_for_armature",
 ]

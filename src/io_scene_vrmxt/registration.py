@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: MIT
-"""Register Blender property groups, UI, and VRM export preview omit."""
+"""Register Blender property groups, authoring UI, and export preview omit."""
 
 from __future__ import annotations
 
-from . import export_ops
 from .materials_override import ops as materials_ops
 from .materials_override import panel as materials_panel
 from .materials_override import property_group as materials_property_group
@@ -25,7 +24,6 @@ def register() -> None:
     vfx_ops.register()
     materials_ops.register()
     mtoonxt_ops.register()
-    export_ops.register()
     vfx_panel.register()
     materials_panel.register()
     mtoonxt_panel.register()
@@ -37,7 +35,6 @@ def unregister() -> None:
     mtoonxt_panel.unregister()
     materials_panel.unregister()
     vfx_panel.unregister()
-    export_ops.unregister()
     mtoonxt_ops.unregister()
     materials_ops.unregister()
     vfx_ops.unregister()

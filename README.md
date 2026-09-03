@@ -44,22 +44,22 @@ The same source tree can be vendored under another Blender extension. In that
 mode, import the vendored package by its nested package name and call
 `integration.register_embedded(...)`. VRMXT still owns and registers its
 portable Scene/Material properties; embedded registration omits only standalone
-panels and operators. A host can mirror its UI model with
-`integration.sync_bvt_scene_to_vrmxt(scene)` and call
-`integration.export_vrm_with_vrmxt(...)`. Existing shared RNA from an enabled
-standalone copy is reused rather than duplicated.
+panels. The host exposes `Vrm1ImportUserExtension` and
+`Vrm1ExportUserExtension` from its top-level package so the official VRM add-on
+discovers them. Existing shared RNA from an enabled standalone copy is reused
+rather than duplicated.
 
 The Blender manifest lives beside the Python package so the source directory is
 directly buildable as a standalone extension. Embedded hosts ignore that data
 file and load the same package through `integration`, so standalone and embedded
 installations cannot drift into separate implementations.
 
-Standalone installs expose **File > Export > VRM with VRMXT Extensions**. The
-operator calls the installed VRM add-on first, uses Extended VRM hooks when
-available, and atomically adds missing VRMXT JSON to the completed GLB as a
-fallback. Original VRM materials and all stock VRM 0.x/1.x features remain
-authoritative. The mapping, hook transaction, serializer, and fallback all live
-inside VRMXT; embedded hosts only synchronize properties and call this API.
+Use the official **File > Export > VRM (.vrm)** command.
+`Vrm1ExportUserExtension.pre_save_hook()` receives the final material and node
+maps and adds authored metadata before the official exporter writes the file.
+`Vrm1ImportUserExtension.post_import_hook()` restores that metadata after the
+official importer finishes. VRMXT does not register an export operator, invoke
+another exporter, or patch a completed GLB.
 
 ## Development
 

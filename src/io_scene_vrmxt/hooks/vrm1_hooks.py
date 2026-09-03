@@ -15,6 +15,7 @@ from ..materials_override.import_hook import (
 )
 from ..mtoonxt.export_hook import on_vrm1_export as on_mtoonxt_export
 from ..mtoonxt.import_hook import on_vrm1_import as on_mtoonxt_import
+from ..mtoonxt.property_sync import sync_bvt_scene_to_vrmxt
 from ..vfx.export_hook import on_vrm1_export as on_vfx_export
 from ..vfx.import_hook import on_vrm1_import as on_vfx_import
 from .shim import make_export_context, make_import_context
@@ -73,17 +74,21 @@ class Vrm1ExportUserExtension:
         material_index_to_material: Mapping[int, Any],
         _mesh_index_to_mesh: Mapping[int, Any],
     ) -> None:
-        _on_vrm1_export(
-            make_export_context(
-                json_chunk,
-                bin_chunk,
-                armature,
-                node_index_to_object,
-                node_index_to_bone,
-                image_index_to_image,
-                material_index_to_material,
-            )
+        context = make_export_context(
+            json_chunk,
+            bin_chunk,
+            armature,
+            node_index_to_object,
+            node_index_to_bone,
+            image_index_to_image,
+            material_index_to_material,
         )
+        context.mtoonxt_relationship_graph_authoritative = False
+        if context.scene is not None:
+            context.mtoonxt_relationship_graph_authoritative = bool(
+                sync_bvt_scene_to_vrmxt(context.scene)
+            )
+        _on_vrm1_export(context)
 
 
 __all__ = [
