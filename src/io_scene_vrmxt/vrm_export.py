@@ -69,7 +69,76 @@ class _ExportHookTransaction:
         self._previous = None
 
 
-def _invoke_host_export(export_operator: Any, filepath: str) -> set[str]:
+class _SelectionTransaction:
+    """Restore the user's exact View Layer selection after the host exporter."""
+
+    def __init__(self, context: Any):
+        self._context = context
+        self._selected = tuple(getattr(context, "selected_objects", ()) or ())
+        view_layer = getattr(context, "view_layer", None)
+        objects = getattr(view_layer, "objects", None)
+        self._active = getattr(objects, "active", None)
+
+    def close(self) -> None:
+        context = self._context
+        view_layer = getattr(context, "view_layer", None)
+        objects = getattr(view_layer, "objects", None)
+        if objects is None:
+            return
+        for obj in tuple(objects):
+            try:
+                obj.select_set(False)
+            except (AttributeError, ReferenceError, RuntimeError):
+                continue
+        for obj in self._selected:
+            try:
+                if obj.name in objects:
+                    obj.select_set(True)
+            except (AttributeError, ReferenceError, RuntimeError, TypeError):
+                continue
+        try:
+            active_name = getattr(self._active, "name", None)
+            objects.active = (
+                self._active
+                if isinstance(active_name, str) and active_name in objects
+                else None
+            )
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            try:
+                objects.active = self._active
+            except (AttributeError, ReferenceError, RuntimeError, TypeError):
+                pass
+        self._context = None
+        self._selected = ()
+        self._active = None
+
+
+def _host_export_preferences(context: Any) -> Any | None:
+    """Find the installed VRM add-on's export preferences by capability.
+
+    The official add-on can be installed from either Blender Extensions or a
+    legacy add-on path, so its module key is not stable enough to use here.
+    """
+
+    preferences = getattr(context, "preferences", None)
+    addons = getattr(preferences, "addons", ()) if preferences is not None else ()
+    for addon in tuple(addons):
+        addon_preferences = getattr(addon, "preferences", None)
+        if (
+            hasattr(addon_preferences, "export_only_selections")
+            and hasattr(addon_preferences, "export_invisibles")
+        ):
+            return addon_preferences
+    return None
+
+
+def _invoke_host_export(
+    export_operator: Any,
+    filepath: str,
+    *,
+    context: Any,
+    require_complete_material_graph: bool,
+) -> set[str]:
     properties = None
     get_rna_type = getattr(export_operator, "get_rna_type", None)
     if callable(get_rna_type):
@@ -78,7 +147,40 @@ def _invoke_host_export(export_operator: Any, filepath: str) -> set[str]:
         except (AttributeError, RuntimeError, TypeError):
             properties = None
     keywords: dict[str, Any] = {"filepath": filepath}
-    if properties is not None and "use_addon_preferences" in properties:
+    property_names = {
+        str(getattr(prop, "identifier", ""))
+        for prop in tuple(properties or ())
+        if getattr(prop, "identifier", None)
+    }
+    if not property_names and properties is not None:
+        # Blender's RNA collection supports membership by identifier even when
+        # a lightweight test double does not expose iteration.
+        property_names = {
+            name
+            for name in ("use_addon_preferences", "export_only_selections")
+            if name in properties
+        }
+
+    if require_complete_material_graph:
+        # A relationship can reference materials outside the current selection.
+        # Preserve every other official VRM preference, but force this one export
+        # to include the complete avatar so neither side of a relationship can be
+        # silently omitted from the glTF material table.
+        host_preferences = _host_export_preferences(context)
+        if host_preferences is not None:
+            for name in property_names:
+                if name in {"filepath", "use_addon_preferences"} or not hasattr(
+                    host_preferences, name
+                ):
+                    continue
+                value = getattr(host_preferences, name)
+                if isinstance(value, (bool, int, float, str)):
+                    keywords[name] = value
+        if "use_addon_preferences" in property_names:
+            keywords["use_addon_preferences"] = False
+        if "export_only_selections" in property_names:
+            keywords["export_only_selections"] = False
+    elif "use_addon_preferences" in property_names:
         keywords["use_addon_preferences"] = True
     return set(export_operator("EXEC_DEFAULT", **keywords))
 
@@ -178,11 +280,26 @@ def export_vrm_with_vrmxt(
             {"CANCELLED"}, error="The VRM add-on export operator is unavailable."
         )
 
+    authored = bool(
+        getattr(
+            getattr(scene, "vrmxt_mtoonxt_relationship_settings", None),
+            "relationships",
+            (),
+        )
+    )
+
+    selection_transaction = _SelectionTransaction(context)
     transaction = _ExportHookTransaction(context)
     try:
-        operator_result = _invoke_host_export(export_operator, filepath)
+        operator_result = _invoke_host_export(
+            export_operator,
+            filepath,
+            context=context,
+            require_complete_material_graph=authored,
+        )
     finally:
         transaction.close()
+        selection_transaction.close()
     if "FINISHED" not in operator_result:
         return VrmxtExportResult(operator_result)
 
@@ -209,13 +326,6 @@ def export_vrm_with_vrmxt(
         )
 
     count = _count_vrmxt_materials(document)
-    authored = bool(
-        getattr(
-            getattr(scene, "vrmxt_mtoonxt_relationship_settings", None),
-            "relationships",
-            (),
-        )
-    )
     if authored and count == 0:
         return VrmxtExportResult(
             {"CANCELLED"},
