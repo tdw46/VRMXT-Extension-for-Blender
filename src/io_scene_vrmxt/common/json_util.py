@@ -11,14 +11,41 @@ Json = Union[None, bool, int, float, str, list["Json"], dict[str, "Json"]]
 
 
 def as_dict(value: object) -> dict[str, Json] | None:
+    """Accept dict or frozen stock-VRM ``JsonView`` (``MappingProxyType``)."""
     if isinstance(value, dict):
         return value
+    if isinstance(value, Mapping) and not isinstance(value, (str, bytes, bytearray)):
+        result: dict[str, Json] = {}
+        for key, item in value.items():
+            if isinstance(key, str):
+                result[key] = item  # type: ignore[assignment]
+        return result
     return None
 
 
 def as_list(value: object) -> list[Json] | None:
+    """Accept list or frozen stock-VRM ``JsonView`` (tuple)."""
     if isinstance(value, list):
         return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return list(value)
+    return None
+
+
+def to_plain_json(value: object) -> Json:
+    """Deep-copy frozen stock-VRM ``JsonView`` into json.dumps-safe dict/list."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Mapping) and not isinstance(value, (str, bytes, bytearray)):
+        return {
+            key: to_plain_json(item)
+            for key, item in value.items()
+            if isinstance(key, str)
+        }
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [to_plain_json(item) for item in value]
     return None
 
 
@@ -101,4 +128,5 @@ __all__ = [
     "finite_numbers",
     "get_material_extension",
     "get_root_extension",
+    "to_plain_json",
 ]
