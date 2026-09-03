@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.2.6
+
+- Import/export uses stock VRM Add-on for Blender **4.6.0**
+  `Vrm1ImportUserExtension` / `Vrm1ExportUserExtension` (no fork
+  `extension_hooks` register).
+- Import reads frozen stock JSON (`MappingProxyType` / tuple), not only
+  `dict` / `list`.
+- VFX preview helpers unlink from collections during stock VRM export gather
+  (`vrmxt_vfx_preview` only; drop `vrm_exclude_from_export`).
+- Image pack helpers scan `bl_ext.*.vrm` exporter modules, not only
+  `user_default`.
+
 ## 0.2.5
 
 - **Breaking:** MToonXT glTF key `VRMC_materials_mtoonxt` → `VRMXT_materials_mtoonxt`.

@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ..common.constants import EXTENSION_MATERIALS_OVERRIDE
-from ..common.json_util import Json, as_dict, as_list
+from ..common.json_util import Json, as_dict, as_list, to_plain_json
 from ..vfx.import_hook import resolve_texture_image
 from .sync import CUSTOM_PROP_KEY, populate_groups_from_raw_json
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _set_material_override_json(material: Any, payload: dict[str, Json]) -> None:
-    serialized = json.dumps(payload)
+    serialized = json.dumps(to_plain_json(payload))
     if hasattr(material, "vrmxt_materials_override_settings"):
         material.vrmxt_materials_override_settings.raw_json = serialized
         populate_groups_from_raw_json(material, serialized)

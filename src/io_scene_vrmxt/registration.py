@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: MIT
-"""Register Blender property groups, UI, and VRM 1.0 extension hooks."""
+"""Register Blender property groups, UI, and VRM export preview omit."""
 
 from __future__ import annotations
 
-from .hooks import vrm1_hooks
 from .materials_override import ops as materials_ops
 from .materials_override import panel as materials_panel
 from .materials_override import property_group as materials_property_group
 from .mtoonxt import ops as mtoonxt_ops
 from .mtoonxt import panel as mtoonxt_panel
 from .mtoonxt import property_group as mtoonxt_property_group
+from .vfx import export_preview_omit
 from .vfx import ops as vfx_ops
 from .vfx import panel as vfx_panel
 from .vfx import property_group as vfx_property_group
@@ -27,11 +27,11 @@ def register() -> None:
     vfx_panel.register()
     materials_panel.register()
     mtoonxt_panel.register()
-    vrm1_hooks.register()
+    export_preview_omit.register()
 
 
 def unregister() -> None:
-    vrm1_hooks.unregister()
+    export_preview_omit.unregister()
     mtoonxt_panel.unregister()
     materials_panel.unregister()
     vfx_panel.unregister()

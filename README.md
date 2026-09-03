@@ -1,8 +1,10 @@
 # VRMXT Extension for Blender
 
 Optional Blender 4.2+ extension that authors and round-trips Extended VRM
-extensions (`VRMXT_*`) on top of
-[Extended-VRM-Addon-for-Blender](https://github.com/miramocha/Extended-VRM-Addon-for-Blender).
+extensions (`VRMXT_*`) on top of stock
+[VRM Add-on for Blender](https://github.com/saturday06/VRM-Addon-for-Blender)
+**4.6.0** or later (VRM 1.0 `Vrm1ImportUserExtension` /
+`Vrm1ExportUserExtension` hooks).
 
 Specs live in [Extended-VRM-Specs](https://github.com/miramocha/Extended-VRM-Specs).
 
@@ -20,13 +22,14 @@ MToonXT stencil.
 ## Requirements
 
 - Blender **4.2** inclusive through **&lt;5.3**
-- [Extended-VRM-Addon-for-Blender](https://github.com/miramocha/Extended-VRM-Addon-for-Blender) with `io_scene_vrm.extension_hooks` (VRM 1.0 hooks)
+- [VRM Add-on for Blender](https://github.com/saturday06/VRM-Addon-for-Blender/releases/tag/v4.6.0) **4.6.0+** (VRM 1.0 third-party hooks)
 
 ## Install
 
-1. Install and enable Extended VRM for Blender.
+1. Install and enable VRM format 4.6.0 or later.
 2. Install this extension (`id = vrmxt`, module `io_scene_vrmxt`).
-3. Enable **VRMXT Extensions**.
+3. Enable **VRMXT Extensions**. Stock VRM discovers `Vrm1ImportUserExtension` /
+   `Vrm1ExportUserExtension` on this add-on's root module.
 
 ## Development
 

@@ -2,9 +2,9 @@
 """Geometry Nodes viewport preview for VRMXT_sprite_particle emitters.
 
 Property groups remain the export source of truth. Preview helpers are tagged
-with ``PREVIEW_CUSTOM_PROP`` (VRMXT lifecycle) and
-``EXCLUDE_FROM_EXPORT_CUSTOM_PROP`` (host ``export_objects`` filter) and must
-not be inferred back into VFX data. Preview sprite geometry is never exported.
+with ``PREVIEW_CUSTOM_PROP`` (VRMXT lifecycle) and must not be inferred back
+into VFX data. ``export_preview_omit`` unlinks them before stock VRM gather.
+Preview sprite geometry is never exported.
 
 Preview motion uses node local +Y velocity. Sprite size is rectangular
 (``size[0]`` × ``size[1]``). Offsets come from the attachment object's
@@ -26,16 +26,6 @@ logger = logging.getLogger(__name__)
 NODE_GROUP_NAME = "VRMXT_Particle"
 NODE_GROUP_VERSION = 7
 PREVIEW_CUSTOM_PROP = "vrmxt_vfx_preview"
-# Host contract (Extended VRM ``export_objects``). Soft-import when available.
-EXCLUDE_FROM_EXPORT_CUSTOM_PROP = "vrm_exclude_from_export"
-try:
-    from io_scene_vrm.extension_hooks import (  # type: ignore[attr-defined]
-        EXCLUDE_FROM_EXPORT_CUSTOM_PROP as _HOST_EXCLUDE_PROP,
-    )
-
-    EXCLUDE_FROM_EXPORT_CUSTOM_PROP = _HOST_EXCLUDE_PROP
-except ImportError:
-    pass
 # Stable per-armature id (UUID). Helpers store this value — not the armature name —
 # so rename does not orphan previews.
 ARMATURE_PREVIEW_ID_PROP = "vrmxt_vfx_id"
@@ -513,7 +503,6 @@ def _spawn_emitter_preview(
     empty.empty_display_type = "PLAIN_AXES"
     empty.empty_display_size = 0.05
     empty[PREVIEW_CUSTOM_PROP] = 1
-    empty[EXCLUDE_FROM_EXPORT_CUSTOM_PROP] = 1
     empty[PREVIEW_ARMATURE_PROP] = armature_id
     empty[PREVIEW_EMITTER_PROP] = getattr(emitter, "name", "") or name
     empty.hide_render = True
@@ -538,7 +527,6 @@ def _spawn_emitter_preview(
 
     geo = bpy.data.objects.new(geo_name, mesh)
     geo[PREVIEW_CUSTOM_PROP] = 1
-    geo[EXCLUDE_FROM_EXPORT_CUSTOM_PROP] = 1
     geo[PREVIEW_ARMATURE_PROP] = armature_id
     geo[PREVIEW_EMITTER_PROP] = getattr(emitter, "name", "") or name
     geo.hide_render = True
@@ -723,7 +711,6 @@ def _set_modifier_input(modifier: Any, identifier: str, value: Any) -> None:
 
 __all__ = [
     "ARMATURE_PREVIEW_ID_PROP",
-    "EXCLUDE_FROM_EXPORT_CUSTOM_PROP",
     "MATERIAL_NAME_PREFIX",
     "MODIFIER_NAME",
     "NODE_GROUP_NAME",

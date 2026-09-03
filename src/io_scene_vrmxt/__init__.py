@@ -4,7 +4,7 @@
 bl_info = {
     "name": "VRMXT Extensions",
     "author": "Mira Luna",
-    "version": (0, 2, 5),
+    "version": (0, 2, 6),
     "blender": (4, 2, 0),
     "location": "File > Import-Export",
     "description": "Optional VRMXT_* authoring for Extended VRM",
@@ -14,6 +14,17 @@ bl_info = {
 }
 
 from . import registration  # noqa: E402
+from .hooks.vrm1_hooks import (  # noqa: E402
+    Vrm1ExportUserExtension,
+    Vrm1ImportUserExtension,
+)
+
+__all__ = [
+    "Vrm1ExportUserExtension",
+    "Vrm1ImportUserExtension",
+    "register",
+    "unregister",
+]
 
 
 def register() -> None:
