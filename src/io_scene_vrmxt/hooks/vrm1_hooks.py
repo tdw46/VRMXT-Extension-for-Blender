@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: MIT
-"""Register VRM 1.0 import/export hooks with the Extended VRM add-on."""
+"""Stock VRM 4.6.0 user-extension entry points for VRMXT import/export."""
 
 from __future__ import annotations
 
-import importlib
 import logging
-from types import ModuleType
+from collections.abc import Mapping
 from typing import Any
 
 from ..materials_override.export_hook import (
@@ -18,65 +17,9 @@ from ..mtoonxt.export_hook import on_vrm1_export as on_mtoonxt_export
 from ..mtoonxt.import_hook import on_vrm1_import as on_mtoonxt_import
 from ..vfx.export_hook import on_vrm1_export as on_vfx_export
 from ..vfx.import_hook import on_vrm1_import as on_vfx_import
+from .shim import make_export_context, make_import_context
 
 logger = logging.getLogger(__name__)
-
-_EXTENSION_HOOKS_MODULE: ModuleType | None = None
-_HOOKS_AVAILABLE = False
-
-_IMPORT_MODULE_CANDIDATES = ("io_scene_vrm.extension_hooks",)
-
-
-def _iter_extension_hook_module_names() -> list[str]:
-    names = list(_IMPORT_MODULE_CANDIDATES)
-    try:
-        import sys
-
-        for module_name in sys.modules:
-            if module_name.startswith("bl_ext.") and module_name.endswith(
-                ".vrm.extension_hooks"
-            ):
-                names.append(module_name)
-    except Exception:  # noqa: BLE001
-        logger.debug(
-            "Unable to scan sys.modules for bl_ext VRM hook modules", exc_info=True
-        )
-    return names
-
-
-def _load_extension_hooks_module() -> ModuleType | None:
-    for module_name in _iter_extension_hook_module_names():
-        try:
-            return importlib.import_module(module_name)
-        except ImportError:
-            continue
-    return None
-
-
-def _get_extension_hooks_module() -> ModuleType | None:
-    global _EXTENSION_HOOKS_MODULE, _HOOKS_AVAILABLE
-    if _EXTENSION_HOOKS_MODULE is not None:
-        return _EXTENSION_HOOKS_MODULE
-    module = _load_extension_hooks_module()
-    if module is None:
-        _HOOKS_AVAILABLE = False
-        return None
-    required = (
-        "register_vrm1_import_extension_hook",
-        "unregister_vrm1_import_extension_hook",
-        "register_vrm1_export_extension_hook",
-        "unregister_vrm1_export_extension_hook",
-    )
-    if not all(hasattr(module, name) for name in required):
-        _HOOKS_AVAILABLE = False
-        return None
-    _EXTENSION_HOOKS_MODULE = module
-    _HOOKS_AVAILABLE = True
-    return module
-
-
-def hooks_available() -> bool:
-    return _get_extension_hooks_module() is not None
 
 
 def _on_vrm1_import(context: Any) -> None:
@@ -91,27 +34,60 @@ def _on_vrm1_export(context: Any) -> None:
     on_mtoonxt_export(context)
 
 
-def register() -> None:
-    module = _get_extension_hooks_module()
-    if module is None:
-        logger.info(
-            "Extended VRM extension hooks are unavailable; VRMXT hooks not registered"
+class Vrm1ImportUserExtension:
+    """Discovered by stock VRM on the add-on root module."""
+
+    def post_import_hook(
+        self,
+        json_chunk: Mapping[str, Any],
+        _bin_chunk: bytes,
+        armature: Any,
+        node_index_to_object: Mapping[int, Any],
+        node_index_to_bone: Mapping[int, Any],
+        image_index_to_image: Mapping[int, Any],
+        material_index_to_material: Mapping[int, Any],
+        _mesh_index_to_mesh: Mapping[int, Any],
+    ) -> None:
+        _on_vrm1_import(
+            make_import_context(
+                json_chunk,
+                armature,
+                node_index_to_object,
+                node_index_to_bone,
+                image_index_to_image,
+                material_index_to_material,
+            )
         )
-        return
-    module.register_vrm1_import_extension_hook(_on_vrm1_import)
-    module.register_vrm1_export_extension_hook(_on_vrm1_export)
 
 
-def unregister() -> None:
-    module = _get_extension_hooks_module()
-    if module is None:
-        return
-    module.unregister_vrm1_import_extension_hook(_on_vrm1_import)
-    module.unregister_vrm1_export_extension_hook(_on_vrm1_export)
+class Vrm1ExportUserExtension:
+    """Discovered by stock VRM on the add-on root module."""
+
+    def pre_save_hook(
+        self,
+        json_chunk: dict[str, Any],
+        bin_chunk: bytearray,
+        armature: Any,
+        node_index_to_object: Mapping[int, Any],
+        node_index_to_bone: Mapping[int, Any],
+        image_index_to_image: Mapping[int, Any],
+        material_index_to_material: Mapping[int, Any],
+        _mesh_index_to_mesh: Mapping[int, Any],
+    ) -> None:
+        _on_vrm1_export(
+            make_export_context(
+                json_chunk,
+                bin_chunk,
+                armature,
+                node_index_to_object,
+                node_index_to_bone,
+                image_index_to_image,
+                material_index_to_material,
+            )
+        )
 
 
 __all__ = [
-    "hooks_available",
-    "register",
-    "unregister",
+    "Vrm1ExportUserExtension",
+    "Vrm1ImportUserExtension",
 ]

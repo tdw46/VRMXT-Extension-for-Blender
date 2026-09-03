@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import sys
 from collections.abc import MutableMapping, Sequence
 from typing import Any
 
@@ -13,23 +14,48 @@ logger = logging.getLogger(__name__)
 _IMAGE_HELPERS: tuple[Any, Any] | None | bool = False
 
 
+def _iter_image_helper_modules() -> list[tuple[str, str, str]]:
+    """``(exporter_module, exporter_attr, support_module)`` for stock VRM installs."""
+    candidates: list[tuple[str, str, str]] = [
+        (
+            "io_scene_vrm.exporter.vrm1_exporter",
+            "Vrm1Exporter",
+            "io_scene_vrm.external.io_scene_gltf2_support",
+        ),
+        (
+            "bl_ext.user_default.vrm.exporter.vrm1_exporter",
+            "Vrm1Exporter",
+            "bl_ext.user_default.vrm.external.io_scene_gltf2_support",
+        ),
+    ]
+    suffix = ".vrm.exporter.vrm1_exporter"
+    seen = {row[0] for row in candidates}
+    for module_name in sys.modules:
+        if not module_name.startswith("bl_ext.") or not module_name.endswith(suffix):
+            continue
+        if module_name in seen:
+            continue
+        prefix = module_name[: -len(suffix)]
+        candidates.append(
+            (
+                module_name,
+                "Vrm1Exporter",
+                prefix + ".vrm.external.io_scene_gltf2_support",
+            )
+        )
+        seen.add(module_name)
+    return candidates
+
+
 def _load_image_helpers() -> tuple[Any, Any] | None:
     """Return ``(find_or_create_image, create_export_settings)`` or ``None``."""
     global _IMAGE_HELPERS
     if _IMAGE_HELPERS is False:
-        candidates = (
-            (
-                "io_scene_vrm.exporter.vrm1_exporter",
-                "Vrm1Exporter",
-                "io_scene_vrm.external.io_scene_gltf2_support",
-            ),
-            (
-                "bl_ext.user_default.vrm.exporter.vrm1_exporter",
-                "Vrm1Exporter",
-                "bl_ext.user_default.vrm.external.io_scene_gltf2_support",
-            ),
-        )
-        for exporter_module, exporter_attr, support_module in candidates:
+        for (
+            exporter_module,
+            exporter_attr,
+            support_module,
+        ) in _iter_image_helper_modules():
             try:
                 exporter = getattr(
                     importlib.import_module(exporter_module), exporter_attr

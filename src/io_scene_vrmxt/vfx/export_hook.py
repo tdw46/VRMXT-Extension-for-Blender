@@ -2,8 +2,8 @@
 """Serialize armature VFX property groups into root VRMXT_sprite_particle.
 
 Export reads property groups only. Geometry Nodes preview helpers tagged with
-``vrmxt_vfx_preview`` are never a source of truth. Host ``export_objects`` also
-omits helpers tagged ``vrm_exclude_from_export``.
+``vrmxt_vfx_preview`` are never a source of truth. ``export_preview_omit``
+unlinks those helpers before stock VRM ``export_objects``.
 """
 
 from __future__ import annotations

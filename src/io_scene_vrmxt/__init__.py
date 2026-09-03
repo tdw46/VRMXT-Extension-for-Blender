@@ -14,6 +14,17 @@ bl_info = {
 }
 
 from . import registration  # noqa: E402
+from .hooks.vrm1_hooks import (  # noqa: E402
+    Vrm1ExportUserExtension,
+    Vrm1ImportUserExtension,
+)
+
+__all__ = [
+    "Vrm1ExportUserExtension",
+    "Vrm1ImportUserExtension",
+    "register",
+    "unregister",
+]
 
 
 def register() -> None:

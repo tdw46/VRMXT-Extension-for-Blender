@@ -125,6 +125,26 @@ class TestVfxTextureResolution(unittest.TestCase):
         self.assertEqual(texture_index, 0)
         self.assertEqual(json_dict["textures"][0]["source"], 3)
 
+    def test_iter_image_helper_modules_scans_bl_ext(self) -> None:
+        import sys
+
+        from io_scene_vrmxt.vfx.gltf_texture import _iter_image_helper_modules
+
+        fake = "bl_ext.repo_xyz.vrm.exporter.vrm1_exporter"
+        sys.modules[fake] = mock.Mock()
+        try:
+            names = [row[0] for row in _iter_image_helper_modules()]
+            self.assertIn(fake, names)
+            support = next(
+                row[2] for row in _iter_image_helper_modules() if row[0] == fake
+            )
+            self.assertEqual(
+                support,
+                "bl_ext.repo_xyz.vrm.external.io_scene_gltf2_support",
+            )
+        finally:
+            sys.modules.pop(fake, None)
+
 
 class TestVfxImportExportAdapters(unittest.TestCase):
     def test_apply_vfx_import_sets_bone_attachment(self) -> None:

@@ -1,72 +1,50 @@
 # SPDX-License-Identifier: MIT
-"""Tests for VRM 1.0 hook registration against a mocked extension_hooks module."""
+"""Tests for stock VRM 4.6.0 user-extension dispatch and map invert."""
 
 from __future__ import annotations
 
-import sys
-import types
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from io_scene_vrmxt.hooks import vrm1_hooks
+from io_scene_vrmxt.hooks.shim import invert_name_to_index, make_export_context
+from io_scene_vrmxt.hooks.vrm1_hooks import (
+    Vrm1ExportUserExtension,
+    Vrm1ImportUserExtension,
+)
 from io_scene_vrmxt.vfx.export_hook import on_vrm1_export as on_vfx_export_hook
 from io_scene_vrmxt.vfx.import_hook import on_vrm1_import as on_vfx_import_hook
 
 
-class _FakeExtensionHooksModule(types.ModuleType):
-    def __init__(self) -> None:
-        super().__init__("io_scene_vrm.extension_hooks")
-        self.import_hooks: list[object] = []
-        self.export_hooks: list[object] = []
+class TestMapInvert(unittest.TestCase):
+    def test_invert_name_to_index(self) -> None:
+        bone_l = SimpleNamespace(name="Hand_L")
+        bone_r = SimpleNamespace(name="Hand_R")
+        self.assertEqual(
+            invert_name_to_index({2: bone_l, 5: bone_r}),
+            {"Hand_L": 2, "Hand_R": 5},
+        )
 
-    def register_vrm1_import_extension_hook(self, hook: object) -> None:
-        if hook not in self.import_hooks:
-            self.import_hooks.append(hook)
-
-    def unregister_vrm1_import_extension_hook(self, hook: object) -> None:
-        try:
-            self.import_hooks.remove(hook)
-        except ValueError:
-            return
-
-    def register_vrm1_export_extension_hook(self, hook: object) -> None:
-        if hook not in self.export_hooks:
-            self.export_hooks.append(hook)
-
-    def unregister_vrm1_export_extension_hook(self, hook: object) -> None:
-        try:
-            self.export_hooks.remove(hook)
-        except ValueError:
-            return
+    def test_export_context_builds_mutable_image_map(self) -> None:
+        image = SimpleNamespace(name="Spark")
+        ctx = make_export_context(
+            json_chunk={"materials": []},
+            bin_chunk=bytearray(b"\x00"),
+            armature=SimpleNamespace(),
+            node_index_to_object={},
+            node_index_to_bone={0: SimpleNamespace(name="hips")},
+            image_index_to_image={3: image},
+            material_index_to_material={1: SimpleNamespace(name="Face")},
+        )
+        self.assertEqual(ctx.bone_name_to_node_index, {"hips": 0})
+        self.assertEqual(ctx.material_name_to_index, {"Face": 1})
+        self.assertEqual(ctx.image_name_to_index, {"Spark": 3})
+        ctx.image_name_to_index["Spark2"] = 4
+        self.assertEqual(ctx.buffer0, bytearray(b"\x00"))
 
 
-class TestHooksRegistration(unittest.TestCase):
-    def setUp(self) -> None:
-        self._original_module = sys.modules.get("io_scene_vrm.extension_hooks")
-        vrm1_hooks._EXTENSION_HOOKS_MODULE = None
-        vrm1_hooks._HOOKS_AVAILABLE = False
-
-    def tearDown(self) -> None:
-        if self._original_module is None:
-            sys.modules.pop("io_scene_vrm.extension_hooks", None)
-        else:
-            sys.modules["io_scene_vrm.extension_hooks"] = self._original_module
-        vrm1_hooks._EXTENSION_HOOKS_MODULE = None
-        vrm1_hooks._HOOKS_AVAILABLE = False
-
-    def test_register_and_unregister_with_mock_module(self) -> None:
-        fake_module = _FakeExtensionHooksModule()
-        sys.modules["io_scene_vrm.extension_hooks"] = fake_module
-
-        vrm1_hooks.register()
-        self.assertTrue(vrm1_hooks.hooks_available())
-        self.assertEqual(len(fake_module.import_hooks), 1)
-        self.assertEqual(len(fake_module.export_hooks), 1)
-
-        vrm1_hooks.unregister()
-        self.assertEqual(fake_module.import_hooks, [])
-        self.assertEqual(fake_module.export_hooks, [])
-
+class TestUserExtensionDispatch(unittest.TestCase):
     def test_import_hook_swallows_exceptions(self) -> None:
         context = mock.Mock()
         context.json_dict = {
@@ -114,6 +92,53 @@ class TestHooksRegistration(unittest.TestCase):
             vfx_import.assert_called_once_with(context)
             materials_import.assert_called_once_with(context)
             mtoonxt_import.assert_called_once_with(context)
+
+    def test_post_import_hook_builds_shim_and_dispatches(self) -> None:
+        armature = SimpleNamespace(name="Armature")
+        bone = SimpleNamespace(name="hips")
+        obj = SimpleNamespace(name="Mesh")
+        image = SimpleNamespace(name="Tex")
+        material = SimpleNamespace(name="Skin")
+        json_chunk = {"extensions": {}}
+        with mock.patch("io_scene_vrmxt.hooks.vrm1_hooks._on_vrm1_import") as dispatch:
+            Vrm1ImportUserExtension().post_import_hook(
+                json_chunk,
+                b"",
+                armature,
+                {1: obj},
+                {0: bone},
+                {2: image},
+                {3: material},
+                {},
+            )
+            dispatch.assert_called_once()
+            ctx = dispatch.call_args[0][0]
+            self.assertEqual(ctx.armature, armature)
+            self.assertEqual(ctx.json_dict, json_chunk)
+            self.assertEqual(ctx.node_index_to_bone_name, {0: "hips"})
+            self.assertEqual(ctx.node_index_to_object_name, {1: "Mesh"})
+            self.assertEqual(ctx.material_index_to_material[3], material)
+
+    def test_pre_save_hook_builds_export_shim(self) -> None:
+        json_chunk: dict = {"materials": []}
+        buffer0 = bytearray(b"ab")
+        armature = SimpleNamespace()
+        with mock.patch("io_scene_vrmxt.hooks.vrm1_hooks._on_vrm1_export") as dispatch:
+            Vrm1ExportUserExtension().pre_save_hook(
+                json_chunk,
+                buffer0,
+                armature,
+                {4: SimpleNamespace(name="Empty")},
+                {1: SimpleNamespace(name="spine")},
+                {0: SimpleNamespace(name="A")},
+                {2: SimpleNamespace(name="Mat")},
+                {},
+            )
+            ctx = dispatch.call_args[0][0]
+            self.assertIs(ctx.json_dict, json_chunk)
+            self.assertIs(ctx.buffer0, buffer0)
+            self.assertEqual(ctx.object_name_to_node_index, {"Empty": 4})
+            self.assertEqual(ctx.bone_name_to_node_index, {"spine": 1})
 
 
 if __name__ == "__main__":
