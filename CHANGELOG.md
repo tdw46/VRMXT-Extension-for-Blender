@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.6
+
 - Import/export uses stock VRM Add-on for Blender **4.6.0**
   `Vrm1ImportUserExtension` / `Vrm1ExportUserExtension` (no fork
   `extension_hooks` register).
