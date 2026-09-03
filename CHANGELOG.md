@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- When Beyond VTuber Tools supplies its authoritative stencil relationship
+  graph, export only that graph and its exact compatibility shorthand instead
+  of leaking unrelated persisted per-material stencil authoring into the VRM.
+
 ## 0.2.6
 
 - Import/export uses stock VRM Add-on for Blender **4.6.0**

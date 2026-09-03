@@ -17,6 +17,7 @@ from io_scene_vrmxt.format.mtoonxt import (
     DEPTH_ALWAYS,
     OP_INSIDE,
     OP_INSIDE_OVERLAY,
+    OP_OUTSIDE,
     OP_SAME,
     OP_WRITE,
     MtoonxtStencil,
@@ -412,6 +413,70 @@ class TestMtoonxtHooks(unittest.TestCase):
             export_hook.unregister_external_relationship_export_provider(provider)
             import_hook.unregister_external_relationship_import_consumer(consumer)
         self.assertEqual(received, [relationship])
+
+    def test_authoritative_relationship_graph_ignores_material_settings(self) -> None:
+        import io_scene_vrmxt.mtoonxt.export_hook as export_hook
+
+        writer_settings = _FakeSettings()
+        writer_settings.body_op = OP_WRITE
+        reader_settings = _FakeSettings()
+        reader_settings.body_op = OP_INSIDE
+        writer = _Mat("Writer", writer_settings)
+        reader = _Mat("Reader", reader_settings)
+        reader_settings.body_targets = [writer]
+
+        stale_writer_settings = _FakeSettings()
+        stale_writer_settings.body_op = OP_WRITE
+        stale_reader_settings = _FakeSettings()
+        stale_reader_settings.body_op = OP_INSIDE
+        stale_writer = _Mat("Stale Writer", stale_writer_settings)
+        stale_reader = _Mat("Stale Reader", stale_reader_settings)
+        stale_reader_settings.body_targets = [stale_writer]
+
+        materials = [
+            {
+                "name": material.name,
+                "extensions": {EXTENSION_MATERIALS_MTOON: {"specVersion": "1.0"}},
+            }
+            for material in (writer, reader, stale_writer, stale_reader)
+        ]
+        relationship = MtoonxtStencilRelationship(writers=[0], readers=[1])
+        context = SimpleNamespace(
+            json_dict={"materials": materials},
+            material_name_to_index={
+                material.name: index
+                for index, material in enumerate(
+                    (writer, reader, stale_writer, stale_reader)
+                )
+            },
+            material_index_to_material={
+                index: material
+                for index, material in enumerate(
+                    (writer, reader, stale_writer, stale_reader)
+                )
+            },
+            mtoonxt_relationship_graph_authoritative=True,
+        )
+
+        def provider(_context, _indices):
+            return [relationship]
+
+        export_hook.register_external_relationship_export_provider(provider)
+        try:
+            export_hook.apply_mtoonxt_export(context)
+        finally:
+            export_hook.unregister_external_relationship_export_provider(provider)
+
+        self.assertEqual(
+            materials[0]["extensions"][EXTENSION_MATERIALS_MTOONXT]["stencil"],
+            {"op": OP_WRITE},
+        )
+        self.assertEqual(
+            materials[1]["extensions"][EXTENSION_MATERIALS_MTOONXT]["stencil"],
+            {"op": OP_OUTSIDE, "materials": [0]},
+        )
+        self.assertNotIn(EXTENSION_MATERIALS_MTOONXT, materials[2]["extensions"])
+        self.assertNotIn(EXTENSION_MATERIALS_MTOONXT, materials[3]["extensions"])
 
     def test_export_writes_indices_and_skips_missing_mtoon(self) -> None:
         white_settings = _FakeSettings()

@@ -7,6 +7,7 @@ from collections.abc import Callable, Sequence
 from typing import Any, Optional
 
 from .format.mtoonxt import MtoonxtStencilRelationship, VrmxtMaterialsMtoonxt
+from .hooks.vrm1_hooks import Vrm1ExportUserExtension, Vrm1ImportUserExtension
 from .mtoonxt import property_group as mtoonxt_property_group
 from .mtoonxt.export_hook import (
     register_external_export_provider,
@@ -22,7 +23,6 @@ from .mtoonxt.property_sync import (
     initialize_bvt_scene_sync,
     sync_bvt_scene_to_vrmxt,
 )
-from .hooks.vrm1_hooks import Vrm1ExportUserExtension, Vrm1ImportUserExtension
 
 MtoonxtExportProvider = Callable[
     [Any, dict[str, int], int], Optional[VrmxtMaterialsMtoonxt]

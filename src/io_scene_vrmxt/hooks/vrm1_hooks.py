@@ -22,6 +22,7 @@ from .shim import make_export_context, make_import_context
 
 logger = logging.getLogger(__name__)
 
+
 def _on_vrm1_import(context: Any) -> None:
     on_vfx_import(context)
     on_materials_import(context)
@@ -46,7 +47,7 @@ class Vrm1ImportUserExtension:
         node_index_to_bone: Mapping[int, Any],
         image_index_to_image: Mapping[int, Any],
         material_index_to_material: Mapping[int, Any],
-        _mesh_index_to_mesh: Mapping[int, Any],
+        mesh_index_to_mesh: Mapping[int, Any],
     ) -> None:
         _on_vrm1_import(
             make_import_context(
@@ -56,6 +57,7 @@ class Vrm1ImportUserExtension:
                 node_index_to_bone,
                 image_index_to_image,
                 material_index_to_material,
+                mesh_index_to_mesh,
             )
         )
 
@@ -72,7 +74,7 @@ class Vrm1ExportUserExtension:
         node_index_to_bone: Mapping[int, Any],
         image_index_to_image: Mapping[int, Any],
         material_index_to_material: Mapping[int, Any],
-        _mesh_index_to_mesh: Mapping[int, Any],
+        mesh_index_to_mesh: Mapping[int, Any],
     ) -> None:
         context = make_export_context(
             json_chunk,
@@ -82,6 +84,7 @@ class Vrm1ExportUserExtension:
             node_index_to_bone,
             image_index_to_image,
             material_index_to_material,
+            mesh_index_to_mesh,
         )
         context.mtoonxt_relationship_graph_authoritative = False
         if context.scene is not None:

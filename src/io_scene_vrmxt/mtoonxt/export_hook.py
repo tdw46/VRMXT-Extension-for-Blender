@@ -150,9 +150,15 @@ def extra_from_blender_material(
     material: Any,
     material_name_to_index: dict[str, int],
     own_index: int,
+    *,
+    include_material_settings: bool = True,
 ) -> VrmxtMaterialsMtoonxt | None:
     extra = None
-    settings = getattr(material, "vrmxt_mtoonxt_settings", None)
+    settings = (
+        getattr(material, "vrmxt_mtoonxt_settings", None)
+        if include_material_settings
+        else None
+    )
     if settings is not None:
         body = _stencil_from_settings(
             str(getattr(settings, "body_op", BODY_OP_OFF) or BODY_OP_OFF),
@@ -199,6 +205,9 @@ def apply_mtoonxt_export(context: Any) -> None:
     )
     count = len(materials_raw)
     extras: list[VrmxtMaterialsMtoonxt | None] = [None] * count
+    include_material_settings = not bool(
+        getattr(context, "mtoonxt_relationship_graph_authoritative", False)
+    )
 
     for material_name, material_index in name_to_index.items():
         if material_index < 0 or material_index >= count:
@@ -209,7 +218,10 @@ def apply_mtoonxt_export(context: Any) -> None:
         if blender_material is None:
             continue
         extras[material_index] = extra_from_blender_material(
-            blender_material, name_to_index, material_index
+            blender_material,
+            name_to_index,
+            material_index,
+            include_material_settings=include_material_settings,
         )
 
     relationships: list[MtoonxtStencilRelationship] = []

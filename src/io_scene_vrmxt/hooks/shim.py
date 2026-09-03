@@ -73,15 +73,21 @@ def make_import_context(
     node_index_to_bone: Mapping[int, Any],
     image_index_to_image: Mapping[int, Any],
     material_index_to_material: Mapping[int, Any],
+    mesh_index_to_mesh: Mapping[int, Any] | None = None,
 ) -> SimpleNamespace:
+    context = blender_context()
     return SimpleNamespace(
-        context=blender_context(),
+        context=context,
+        scene=scene_for_armature(armature, context),
         armature=armature,
         json_dict=json_chunk,
+        node_index_to_object=dict(node_index_to_object or {}),
         node_index_to_object_name=names_from_index_map(node_index_to_object),
+        node_index_to_bone=dict(node_index_to_bone or {}),
         node_index_to_bone_name=names_from_index_map(node_index_to_bone),
         image_index_to_image=dict(image_index_to_image or {}),
         material_index_to_material=dict(material_index_to_material or {}),
+        mesh_index_to_mesh=dict(mesh_index_to_mesh or {}),
     )
 
 
@@ -93,6 +99,7 @@ def make_export_context(
     node_index_to_bone: Mapping[int, Any],
     image_index_to_image: Mapping[int, Any],
     material_index_to_material: Mapping[int, Any],
+    mesh_index_to_mesh: Mapping[int, Any] | None = None,
 ) -> SimpleNamespace:
     context = blender_context()
     buffer0 = bin_chunk if isinstance(bin_chunk, bytearray) else None
@@ -102,10 +109,17 @@ def make_export_context(
         armature=armature,
         json_dict=json_chunk,
         buffer0=buffer0,
+        bin_chunk=bin_chunk,
+        node_index_to_object=dict(node_index_to_object or {}),
         bone_name_to_node_index=invert_name_to_index(node_index_to_bone),
         object_name_to_node_index=invert_name_to_index(node_index_to_object),
+        node_index_to_bone=dict(node_index_to_bone or {}),
+        image_index_to_image=dict(image_index_to_image or {}),
         image_name_to_index=image_name_to_index_from_images(image_index_to_image),
+        material_index_to_material=dict(material_index_to_material or {}),
         material_name_to_index=invert_name_to_index(material_index_to_material),
+        mesh_index_to_mesh=dict(mesh_index_to_mesh or {}),
+        mesh_name_to_index=invert_name_to_index(mesh_index_to_mesh),
     )
 
 
