@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""VRMXT_materials_mtoonxt per-material glTF extension parse/serialize."""
+"""VRMXT_materials_mtoonxt root stencil graph parse/serialize."""
 
 from __future__ import annotations
 
@@ -146,27 +146,8 @@ def parse_mtoonxt(
 ) -> VrmxtMaterialsMtoonxt | None:
     if as_str(extension.get("specVersion")) != SPEC_VERSION_1_0:
         return None
-    stencil = None
-    if "stencil" in extension:
-        stencil = parse_stencil(
-            extension.get("stencil"),
-            allow_same=False,
-            own_index=own_index,
-            material_count=material_count,
-        )
-    outline = None
-    if "outlineStencil" in extension:
-        outline = parse_stencil(
-            extension.get("outlineStencil"),
-            allow_same=True,
-            own_index=own_index,
-            material_count=material_count,
-        )
-    return VrmxtMaterialsMtoonxt(
-        spec_version=SPEC_VERSION_1_0,
-        stencil=stencil,
-        outline_stencil=outline,
-    )
+    # Stencil is authored only by the root graph; retired material shorthand is ignored.
+    return VrmxtMaterialsMtoonxt(spec_version=SPEC_VERSION_1_0)
 
 
 def serialize_stencil(stencil: MtoonxtStencil) -> dict[str, Json]:
@@ -177,12 +158,7 @@ def serialize_stencil(stencil: MtoonxtStencil) -> dict[str, Json]:
 
 
 def serialize_mtoonxt(extension: VrmxtMaterialsMtoonxt) -> dict[str, Json]:
-    result: dict[str, Json] = {"specVersion": extension.spec_version}
-    if extension.stencil is not None:
-        result["stencil"] = serialize_stencil(extension.stencil)
-    if extension.outline_stencil is not None:
-        result["outlineStencil"] = serialize_stencil(extension.outline_stencil)
-    return result
+    return {"specVersion": extension.spec_version}
 
 
 def _parse_material_indices(
@@ -271,7 +247,7 @@ def parse_stencil_relationships(
     extension = get_root_extension(json_dict, EXTENSION_MATERIALS_MTOONXT)
     if extension is None or as_str(extension.get("specVersion")) != SPEC_VERSION_1_0:
         return []
-    values = as_list(extension.get("stencilRelationships"))
+    values = as_list(extension.get("stencil"))
     if values is None:
         return []
     result: list[MtoonxtStencilRelationship] = []
@@ -392,10 +368,13 @@ def write_stencil_relationships(
     if not isinstance(root_extensions, dict):
         root_extensions = {}
         json_dict["extensions"] = root_extensions
+    previous = as_dict(root_extensions.get(EXTENSION_MATERIALS_MTOONXT))
+    if previous is not None:
+        previous.pop("stencilRelationships", None)
     if not relationships:
         current = as_dict(root_extensions.get(EXTENSION_MATERIALS_MTOONXT))
         if current is not None:
-            current.pop("stencilRelationships", None)
+            current.pop("stencil", None)
             if set(current) <= {"specVersion"}:
                 root_extensions.pop(EXTENSION_MATERIALS_MTOONXT, None)
         if not root_extensions:
@@ -411,7 +390,7 @@ def write_stencil_relationships(
         serialized = serialize_stencil_relationship(relationship)
         if serialized not in serialized_relationships:
             serialized_relationships.append(serialized)
-    current["stencilRelationships"] = serialized_relationships
+    current["stencil"] = serialized_relationships
     ensure_mtoonxt_extensions_used(json_dict)
 
 

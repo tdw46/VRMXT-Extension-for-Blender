@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Serialize Blender MToonXT stencil authoring into glTF material extensions."""
+"""Serialize Blender MToonXT stencil authoring into the root glTF extension."""
 
 from __future__ import annotations
 
@@ -16,10 +16,8 @@ from ..format.mtoonxt import (
     MtoonxtStencilRelationship,
     VrmxtMaterialsMtoonxt,
     clear_mtoonxt_from_material_dict,
-    drop_unresolvable_stencils,
     ensure_mtoonxt_extensions_used,
     material_has_sibling_mtoon,
-    write_mtoonxt_to_material_dict,
     write_stencil_relationships,
 )
 from .property_group import (
@@ -27,7 +25,6 @@ from .property_group import (
     OUTLINE_OP_OFF,
     iter_target_materials,
 )
-from .relationship_mapping import relationship_shorthand_extras
 
 logger = logging.getLogger(__name__)
 
@@ -200,30 +197,6 @@ def apply_mtoonxt_export(context: Any) -> None:
     name_to_index: dict[str, int] = dict(
         getattr(context, "material_name_to_index", {}) or {}
     )
-    material_index_to_material = dict(
-        getattr(context, "material_index_to_material", {}) or {}
-    )
-    count = len(materials_raw)
-    extras: list[VrmxtMaterialsMtoonxt | None] = [None] * count
-    include_material_settings = not bool(
-        getattr(context, "mtoonxt_relationship_graph_authoritative", False)
-    )
-
-    for material_name, material_index in name_to_index.items():
-        if material_index < 0 or material_index >= count:
-            continue
-        blender_material = material_index_to_material.get(material_index)
-        if blender_material is None:
-            blender_material = _find_material_by_name(material_name)
-        if blender_material is None:
-            continue
-        extras[material_index] = extra_from_blender_material(
-            blender_material,
-            name_to_index,
-            material_index,
-            include_material_settings=include_material_settings,
-        )
-
     relationships: list[MtoonxtStencilRelationship] = []
     try:
         from .property_group import relationships_from_scene
@@ -254,40 +227,24 @@ def apply_mtoonxt_export(context: Any) -> None:
         and set(relationship.readers).issubset(mtoon_material_indices)
     ]
 
-    # VRMXT owns the compatibility mapping. Root relationships are
-    # authoritative; only pixel-equivalent relationships receive legacy
-    # per-material shorthand for older consumers. Filter to exported VRM 1.0
-    # MToon materials first so a shorthand can never retain half a relation.
-    relationship_extras, relationship_errors = relationship_shorthand_extras(
-        relationships,
-        material_count=count,
-    )
-    for error in relationship_errors:
-        logger.warning("VRMXT relationship shorthand: %s", error)
-    for material_index, relationship_extra in enumerate(relationship_extras):
-        extras[material_index] = _merge_extra(
-            extras[material_index], relationship_extra
-        )
-
-    wrote_any = False
-    for material_index, material_entry in enumerate(materials_raw):
+    # Only the root stencil graph is portable. Never emit retired material ops.
+    for material_entry in materials_raw:
         material_dict = as_dict(material_entry)
         if material_dict is None:
             continue
-        extra = extras[material_index]
+        extensions = as_dict(material_dict.get("extensions"))
+        extra = (
+            as_dict(extensions.get("VRMXT_materials_mtoonxt")) if extensions else None
+        )
         if extra is not None:
-            drop_unresolvable_stencils(extra, extras)
-            if extra.stencil is None and extra.outline_stencil is None:
-                extra = None
-        if extra is None or not material_has_sibling_mtoon(material_dict):
-            clear_mtoonxt_from_material_dict(material_dict)
-            continue
-        write_mtoonxt_to_material_dict(material_dict, extra)
-        wrote_any = True
+            extra.pop("stencil", None)
+            extra.pop("outlineStencil", None)
+            if set(extra) <= {"specVersion"}:
+                clear_mtoonxt_from_material_dict(material_dict)
 
     write_stencil_relationships(json_dict, relationships)
 
-    if wrote_any or relationships:
+    if relationships:
         ensure_mtoonxt_extensions_used(json_dict)
 
 

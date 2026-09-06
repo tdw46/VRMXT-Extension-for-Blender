@@ -7,15 +7,13 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from ..common.json_util import as_dict, as_list
+from ..common.json_util import as_list
 from ..format.mtoonxt import (
     MtoonxtStencilRelationship,
     parse_stencil_relationships,
-    read_mtoonxt_from_material,
 )
 from .property_group import (
     apply_parsed_relationships_to_scene,
-    apply_parsed_to_settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,25 +61,6 @@ def apply_mtoonxt_import(context: Any) -> None:
                 consumer(context, relationships)
             except Exception:  # noqa: BLE001 - one host must not abort import
                 logger.exception("VRMXT external stencil relationship consumer failed")
-
-    for material_index, material_entry in enumerate(materials_raw):
-        material_dict = as_dict(material_entry)
-        if material_dict is None:
-            continue
-        extra = read_mtoonxt_from_material(
-            material_dict,
-            own_index=material_index,
-            material_count=material_count,
-        )
-        if extra is None:
-            continue
-        blender_material = index_to_material.get(material_index)
-        if blender_material is None:
-            continue
-        settings = getattr(blender_material, "vrmxt_mtoonxt_settings", None)
-        if settings is None:
-            continue
-        apply_parsed_to_settings(settings, extra, dict(index_to_material))
 
     if relationships:
         try:

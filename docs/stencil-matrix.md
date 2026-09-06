@@ -11,13 +11,13 @@ The enabled add-on exposes official `Vrm1ImportUserExtension` and
 `Vrm1ExportUserExtension` classes. Embedded BVT delegates to the same VRMXT package
 and mirrors its authoritative relationships into VRMXT properties. Use the stock
 VRM 1.0 export command: `pre_save_hook` resolves final material indices and writes
-the root `VRMXT_materials_mtoonxt.stencilRelationships` graph. No custom exporter
+the root `VRMXT_materials_mtoonxt.stencil` graph. No custom exporter
 or post-export patch is required. Import handles frozen JSON mappings/sequences.
 
-Equivalent writer/presentation rows coalesce their readers. Exact legacy shorthand
-may accompany a relationship, but must not create a second effect in a supporting
-consumer. Authoritative BVT graph export must not leak unrelated stale per-material
-stencil settings. Non-equivalent multi-writer cases must not be silently collapsed.
+Equivalent writer/presentation rows coalesce their readers. Export emits only the root
+`stencil` graph, never per-material operations or a second effect. Unrelated stale
+per-material stencil settings are ignored. Non-equivalent multi-writer cases must not
+be silently collapsed.
 
 ## Matrix coverage
 

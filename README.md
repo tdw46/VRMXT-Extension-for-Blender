@@ -17,7 +17,7 @@ MToonXT stencil.
 |-----------|--------|--------|----|-------|
 | `VRMXT_sprite_particle` | JSON → property groups + GeoNodes preview | property groups → JSON | armature UIList | Flat emitters; offsets via helper Empty; preview via shared `VRMXT_Particle` node group (excluded from export). |
 | `VRMXT_materials_override` | JSON → material store | material store → JSON | VRMXT Material | Unity slots, catalog shaders, textures. Schema: `idType`/`id` (+ optional `properties[]`). |
-| `VRMXT_materials_mtoonxt` | JSON → material ops and root relationships | material/Scene settings → JSON | VRMXT Material + Scene | Body/outline shorthand plus portable cross-material presentation, depth tests, and depth publication. No EEVEE clip. Runtime stencil is supplied by a consumer such as UniVRMXT. |
+| `VRMXT_materials_mtoonxt` | JSON → root stencil graph | Scene settings → JSON | VRMXT Material + Scene | One portable stencil graph controls cross-material presentation, depth tests, and depth publication. No EEVEE clip. Runtime stencil is supplied by a consumer such as UniVRMXT. |
 
 ## Requirements
 

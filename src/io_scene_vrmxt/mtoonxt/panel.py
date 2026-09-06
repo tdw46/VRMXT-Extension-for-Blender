@@ -7,8 +7,6 @@ import contextlib
 from typing import ClassVar
 
 from ..materials_override.panel import VRMXT_MATERIAL_PANEL_ID
-from .draw_order import collect_stencil_draw_warnings
-from .property_group import body_op_needs_targets, outline_op_needs_targets
 
 try:
     import bpy
@@ -28,57 +26,6 @@ def _active_material(context: Context):
     if obj is None:
         return None
     return getattr(obj, "active_material", None)
-
-
-def _draw_target_rows(
-    layout: UILayout,
-    collection: object,
-    remove_id: str,
-) -> None:
-    for index, item in enumerate(collection):
-        row = layout.row(align=True)
-        row.prop(item, "material", text="")
-        op = row.operator(remove_id, text="", icon="X")
-        op.target_index = index
-
-
-def draw_mtoonxt_layout(layout: UILayout, material: object) -> None:
-    settings = getattr(material, "vrmxt_mtoonxt_settings", None)
-    if settings is None:
-        layout.label(text="MToonXT settings unavailable")
-        return
-
-    layout.prop(settings, "body_op")
-    if body_op_needs_targets(str(getattr(settings, "body_op", "") or "")):
-        box = layout.box()
-        box.label(text="Clip against writers")
-        _draw_target_rows(
-            box, settings.body_targets, "vrmxt.mtoonxt_remove_body_target"
-        )
-        box.operator("vrmxt.mtoonxt_add_body_target", icon="ADD")
-
-    layout.prop(settings, "outline_op")
-    if outline_op_needs_targets(str(getattr(settings, "outline_op", "") or "")):
-        box = layout.box()
-        box.label(text="Outline clip against writers")
-        _draw_target_rows(
-            box, settings.outline_targets, "vrmxt.mtoonxt_remove_outline_target"
-        )
-        box.operator("vrmxt.mtoonxt_add_outline_target", icon="ADD")
-
-    all_materials: list[object] = []
-    if bpy is not None:
-        all_materials = list(bpy.data.materials)
-    for headline, detail in collect_stencil_draw_warnings(material, all_materials):
-        warn = layout.box()
-        row = warn.row()
-        row.alert = True
-        row.label(text=headline, icon="ERROR")
-        warn.label(text=detail)
-
-    help_box = layout.box()
-    help_box.label(text="Clip shows in a VRMXT app with MToonXT shaders.")
-    help_box.label(text="This viewport does not clip.")
 
 
 def _draw_relationship_materials(layout: UILayout, item: object, side: str) -> None:
@@ -144,11 +91,13 @@ if bpy is not None:
             material = _active_material(context)
             if material is None:
                 return
-            draw_mtoonxt_layout(self.layout, material)
+            draw_relationship_layout(
+                self.layout, context.scene.vrmxt_mtoonxt_relationship_settings
+            )
 
     class VRMXT_PT_mtoonxt_stencil_relationships(Panel):
         bl_idname = "VRMXT_PT_mtoonxt_stencil_relationships"
-        bl_label = "MToonXT stencil relationships"
+        bl_label = "MToonXT stencil"
         bl_space_type = "PROPERTIES"
         bl_region_type = "WINDOW"
         bl_context = "scene"
@@ -192,7 +141,6 @@ __all__ = [
     "VRMXT_PT_mtoonxt_stencil",
     "VRMXT_PT_mtoonxt_stencil_relationships",
     "draw_relationship_layout",
-    "draw_mtoonxt_layout",
     "register",
     "unregister",
 ]
