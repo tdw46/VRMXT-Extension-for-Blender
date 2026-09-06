@@ -63,6 +63,9 @@ another exporter, or patch a completed GLB.
 
 ## Development
 
+See the [stencil matrix checkpoint](docs/stencil-matrix.md) for official-hook
+ownership, 13 showcased modes and the linked recorded Blender/Unity comparisons.
+
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
 ruff check src tests

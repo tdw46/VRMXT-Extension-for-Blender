@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Document all 13 stencil matrix scenarios and the 24 configured/control
+  export/import audits; link published review media without claiming full
+  visual conformance or changing the portable schema.
 - When Beyond VTuber Tools supplies its authoritative stencil relationship
   graph, export only that graph and its exact compatibility shorthand instead
   of leaking unrelated persisted per-material stencil authoring into the VRM.
