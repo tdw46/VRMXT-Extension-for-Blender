@@ -24,6 +24,19 @@ MToonXT stencil.
 - Blender **4.2** inclusive through **&lt;5.3**
 - [VRM Add-on for Blender](https://github.com/saturday06/VRM-Addon-for-Blender/releases/tag/v4.6.0) **4.6.0+** (VRM 1.0 third-party hooks)
 
+**Beyond VTuber Tools / Beyond VRM Extension Suite is not required.** VRMXT's
+own Material and Scene panels let you configure stencil operations,
+relationships, visibility, and depth settings. The standard VRM importer and
+exporter round-trip these settings without a preview add-on installed.
+
+### Optional Blender preview
+
+For an optional visual preview, [Beyond VRM Extension Suite (BVES) on
+Gumroad](https://beyonddev.gumroad.com/l/vrm) has a **v1.0.0 release coming soon**
+with native-in-Blender stencil preview and MToon render queue offset preview.
+These are upcoming preview features, not requirements for VRMXT authoring,
+import, or export. VRMXT does not install, purchase, or enable BVES for you.
+
 ## Install
 
 1. Install and enable VRM format 4.6.0 or later.
